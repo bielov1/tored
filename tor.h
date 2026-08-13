@@ -1,0 +1,18 @@
+#pragma once
+
+#include <iostream>
+
+#include "raylib.h"
+#include "./la.h"
+
+static const int SCREEN_WIDTH = 800;
+static const int SCREEN_HEIGHT = 600;
+
+static const int FONT_WIDTH = 128;
+static const int FONT_HEIGHT = 64;
+static const int FONT_COLS = 18;
+static const int FONT_ROWS = 7;
+static const int FONT_CHAR_WIDTH = (FONT_WIDTH / FONT_COLS);
+static const int FONT_CHAR_HEIGHT = (FONT_HEIGHT / FONT_ROWS);
+
+static const int BUFFER_CAP = 1024;
