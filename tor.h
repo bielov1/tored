@@ -2,8 +2,14 @@
 
 #include <iostream>
 #include <cstddef>
+#include <span>
+#include <print>
 
 #include "raylib.h"
+#define GRAPHICS_API_OPENGL_33 
+#include "rlgl.h"
+#include "GLFW/glfw3.h"
+
 #include "./la.h"
 
 constexpr unsigned char font_image_data[] {
