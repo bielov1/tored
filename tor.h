@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <cstddef>
+#include <cassert>
 #include <span>
 #include <print>
 
@@ -9,12 +10,18 @@
 #define GRAPHICS_API_OPENGL_33 
 #include "rlgl.h"
 #include "GLFW/glfw3.h"
-
+//#define STB_IMAGE_IMPLEMENTATION
+//#include "stb_image.h"
 #include "./la.h"
 
-constexpr unsigned char font_image_data[] {
-#embed "charmap-oldschool_white.png"
-};
+// constexpr unsigned char file_data[] {
+// #embed "charmap-oldschool_white.png"
+// };
+
+extern "C" {
+    extern const unsigned char _binary_charmap_oldschool_white_png_start[];
+    extern const unsigned char _binary_charmap_oldschool_white_png_end[];
+}
 
 static const int SCREEN_WIDTH = 800;
 static const int SCREEN_HEIGHT = 600;
