@@ -1,6 +1,7 @@
 #pragma once
 
 #include <iostream>
+#include <string>
 #include <cstddef>
 #include <cassert>
 #include <span>
@@ -25,6 +26,9 @@ extern "C" {
 
 static const int SCREEN_WIDTH = 800;
 static const int SCREEN_HEIGHT = 600;
+
+static const int ASCII_DISPLAY_LOW = 32;
+static const int ASCII_DISPLAY_HIGH = 127;
 
 static const int FONT_WIDTH = 128;
 static const int FONT_HEIGHT = 64;
