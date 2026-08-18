@@ -2,36 +2,69 @@
 
 char buffer[BUFFER_CAP + 1];
 int buffer_size = 0;
-int buffer_cursor_row = 0;
-int buffer_cursor_col = 0;
+int buffer_cursor = 0;
 
-auto getCursorX = [buffer_view = std::span{buffer}](){
-    int c = 0;
-    while (buffer_size - c > 0 && buffer_view[buffer_size - c - 1] != '\n') c++;
-    return c;
+int cursor_offset = 0;
+int cursor_last_line = 0;
+int cursor_line = 0;
+
+auto calcCursorOffsetForPrevLine = [buffer_view = std::span{buffer}](int cursor){
+    int k = 0;
+    while (cursor - k > 0 && buffer_view[cursor - k - 1] != '\n') k++;
+    return k;
  };
 
 void handleKeyAction(int key)
 {
     switch (key) {
     case GLFW_KEY_BACKSPACE:
-	buffer_size--;
-	if (buffer_size < 0) buffer_size = 0;
-	if (buffer[buffer_size] == '\n') {
-	    buffer_cursor_row--;
-	    buffer_cursor_col = getCursorX();
-	} else {
-	    buffer_cursor_col--;
-	    if (buffer_cursor_col < 0) buffer_cursor_col = 0;
-	}
+	if (buffer_size > 0) {
+	    buffer_size--;
+	    buffer_cursor = buffer_size;
+	    if (buffer[buffer_size] == '\n') {
+		cursor_line--;
+		cursor_last_line = cursor_line;
+	    } else {
+		cursor_line = cursor_last_line;
+	    }
 	    
-	buffer[buffer_size] = '\0';
+	    cursor_offset = calcCursorOffsetForPrevLine(buffer_cursor);
+	    buffer[buffer_size] = '\0';
+	}
 	break;
     case GLFW_KEY_ENTER:
 	if (buffer_size < BUFFER_CAP) {
 	    buffer[buffer_size++] = '\n';
-	    buffer_cursor_row++;
-	    buffer_cursor_col = 0;
+	    buffer_cursor = buffer_size;
+	    cursor_line = cursor_last_line + 1;
+	    if (cursor_last_line < cursor_line) cursor_last_line = cursor_line;
+	    
+	    cursor_offset = 0;
+	    buffer[buffer_size] = '\0';
+	}
+	break;
+    case GLFW_KEY_LEFT:
+	if (buffer_cursor > 0) {
+	    buffer_cursor--;
+
+	    if (buffer[buffer_cursor] == '\n') {
+		cursor_line--;
+		cursor_offset = calcCursorOffsetForPrevLine(buffer_cursor);
+	    } else {
+		cursor_offset--;
+	    }
+
+	}
+	break;
+    case GLFW_KEY_RIGHT:
+	if (buffer_cursor < buffer_size) {
+	    if (buffer[buffer_cursor] == '\n') {
+		cursor_line++;
+		cursor_offset = 0;
+	    } else {
+		cursor_offset++;
+	    }
+	    buffer_cursor++;
 	}
 	break;
     default:
@@ -50,6 +83,13 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
     if (key == GLFW_KEY_ENTER && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
         handleKeyAction(GLFW_KEY_ENTER);
     }
+    if (key == GLFW_KEY_LEFT && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
+        handleKeyAction(GLFW_KEY_LEFT);
+    }
+    if (key == GLFW_KEY_RIGHT && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
+        handleKeyAction(GLFW_KEY_RIGHT);
+    }
+    
 }
 
 void charCallback(GLFWwindow* window, unsigned int codepoint)
@@ -57,7 +97,15 @@ void charCallback(GLFWwindow* window, unsigned int codepoint)
     (void)window;
     if ((codepoint >= 32) && (codepoint <= 127) && (buffer_size < BUFFER_CAP)) {
 	buffer[buffer_size++] = codepoint;
-	buffer_cursor_col++;
+	
+	if (buffer_cursor + 1 < buffer_size) {
+	    buffer_cursor = buffer_size;
+	    cursor_line = cursor_last_line;
+	    cursor_offset = calcCursorOffsetForPrevLine(buffer_cursor);
+	} else {
+	    buffer_cursor++;
+	    cursor_offset++;
+	}
 	buffer[buffer_size] = '\0';
     }
 }
@@ -84,9 +132,13 @@ void renderText(Font font, const std::string &text, Vec2f pos, int scale, Color 
 
 void renderCursor(Color color, int scale)
 {
-    int x = buffer_cursor_col * FONT_CHAR_WIDTH * scale;
-    int y = buffer_cursor_row * FONT_CHAR_HEIGHT * scale;
-    DrawRectangle(x, y, FONT_CHAR_WIDTH * FONT_SCALE, FONT_CHAR_HEIGHT * FONT_SCALE, color);
+    Rectangle rec = {
+	.x = (float)(cursor_offset * FONT_CHAR_WIDTH * scale),
+	.y = (float)(cursor_line * FONT_CHAR_HEIGHT * scale),
+	.width = (float)(FONT_CHAR_WIDTH * scale),
+	.height = (float)(FONT_CHAR_HEIGHT * scale)
+    };
+    DrawRectangle(rec.x, rec.y, rec.width, rec.height, color);
 }
 
 Font loadPNGDataAsFont(std::span<const unsigned char> data, int cols, int rows, int start_codepoint = 32)
