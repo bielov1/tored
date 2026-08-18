@@ -110,12 +110,17 @@ void charCallback(GLFWwindow* window, unsigned int codepoint)
     }
 }
 
-void renderChar(Font font, char c, Vec2f pos, int scale, Color color)
+void renderChar(const Font& font, char c, Vec2f pos, int scale, Color color)
 {
-    DrawTextCodepoint(font, (int)c, Vector2{pos.x, pos.y}, (float)font.baseSize * scale, color);
+    int idx = GetGlyphIndex(font, (int)c);
+    if (idx > 0) {
+	Rectangle src = font.recs[idx];
+	Rectangle dst = { pos.x, pos.y, src.width * scale, src.height * scale };
+	DrawTexturePro(font.texture, src, dst, Vector2{0.0f, 0.0}, 0.0f, color);
+    }
 }
 
-void renderText(Font font, const std::string &text, Vec2f pos, int scale, Color color)
+void renderText(const Font& font, const std::string &text, Vec2f pos, int scale, Color color)
 {
     int start_x = pos.x;
     for (char c : text) {
@@ -130,15 +135,21 @@ void renderText(Font font, const std::string &text, Vec2f pos, int scale, Color 
     }
 }
 
-void renderCursor(Color color, int scale)
+void renderCursor(const Font& font, int scale)
 {
+    const Vec2f pos {(float)(cursor_offset * FONT_CHAR_WIDTH * scale),
+		     (float)(cursor_line * FONT_CHAR_HEIGHT * scale)};
     Rectangle rec = {
-	.x = (float)(cursor_offset * FONT_CHAR_WIDTH * scale),
-	.y = (float)(cursor_line * FONT_CHAR_HEIGHT * scale),
+	.x = pos.x,
+	.y = pos.y,
 	.width = (float)(FONT_CHAR_WIDTH * scale),
 	.height = (float)(FONT_CHAR_HEIGHT * scale)
     };
-    DrawRectangle(rec.x, rec.y, rec.width, rec.height, color);
+    DrawRectangleRec(rec, WHITE);
+
+    if (buffer_cursor < buffer_size && buffer[buffer_cursor] != '\n') {
+        renderChar(font, buffer[buffer_cursor], pos, scale, BLACK);
+    }
 }
 
 Font loadPNGDataAsFont(std::span<const unsigned char> data, int cols, int rows, int start_codepoint = 32)
@@ -149,6 +160,9 @@ Font loadPNGDataAsFont(std::span<const unsigned char> data, int cols, int rows, 
 	std::fprintf(stderr, "[ERROR] could not load image from memory\n");
 	exit(1);
     }
+    
+    ImageFormat(&image, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
+    ImageColorReplace(&image, BLACK, BLANK);
     
     font.baseSize = image.height / rows;
     font.glyphCount = cols * rows;
@@ -176,6 +190,7 @@ Font loadPNGDataAsFont(std::span<const unsigned char> data, int cols, int rows, 
 	font.recs[i] = rec;
     }
 
+    UnloadImage(image);
     return font;
 }
 
@@ -197,9 +212,9 @@ int main()
     
     while (!WindowShouldClose()) {
 	BeginDrawing();
-            ClearBackground(Color{ 0x18, 0x18, 0x18, 0x0 });
-	    renderText(font, std::string{buffer}, Vec2f{ 0.0f, 0.0f }, FONT_SCALE, WHITE);
-	    renderCursor(WHITE, FONT_SCALE);
+	ClearBackground(Color{ 0x18, 0x18, 0x18, 0x0 });
+	renderText(font, std::string{buffer}, Vec2f{ 0.0f, 0.0f }, FONT_SCALE, WHITE);
+	renderCursor(font, FONT_SCALE);
         EndDrawing();
     }
     
