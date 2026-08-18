@@ -33,13 +33,14 @@ void bufferBackspace()
     if (buffer_cursor > 0 && buffer_size > 0) {
 	if (buffer[buffer_cursor - 1] == '\n') {
 	    cursor_line -= 1;
-
+	    
 	    size_t prev_newline = buffer.rfind('\n', buffer_cursor - 2);
-        
+       
 	    if (prev_newline == std::string::npos) {
 		cursor_offset = buffer_cursor - 1;
 	    } else {
 		cursor_offset = (buffer_cursor - 1) - (prev_newline + 1);
+		if (cursor_offset < 0) cursor_offset = 0;
 	    }
 	} else {
 	    cursor_offset -= 1;
@@ -52,15 +53,16 @@ void bufferBackspace()
 }
 void bufferCursorMoveLeft()
 {
-    if (buffer_cursor > 0) {
+    if (buffer_cursor > 0 && buffer_size > 0) {
 	if (buffer[buffer_cursor - 1] == '\n') {
 	    cursor_line -= 1;
-
+	    
 	    size_t prev_newline = buffer.rfind('\n', buffer_cursor - 2);
 	    if (prev_newline == std::string::npos) {
 		cursor_offset = buffer_cursor - 1;
 	    } else {
 		cursor_offset = (buffer_cursor - 1) - (prev_newline + 1);
+		if (cursor_offset < 0) cursor_offset = 0;
 	    }
 	} else {
 	    cursor_offset -= 1;
