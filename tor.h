@@ -1,41 +1,54 @@
 #pragma once
 
-#include <iostream>
-#include <string>
+#include <print>
 #include <cstddef>
 #include <cassert>
-#include <span>
-#include <print>
+#include <vector>
 
 #include "raylib.h"
-#define GRAPHICS_API_OPENGL_33 
-#include "rlgl.h"
+#define GRAPHICS_API_OPENGL_33
 #include "GLFW/glfw3.h"
-//#define STB_IMAGE_IMPLEMENTATION
-//#include "stb_image.h"
+#include "rlgl.h"
+
 #include "./la.h"
-
-// constexpr unsigned char file_data[] {
-// #embed "charmap-oldschool_white.png"
-// };
-
-extern "C" {
-    extern const unsigned char _binary_charmap_oldschool_white_png_start[];
-    extern const unsigned char _binary_charmap_oldschool_white_png_end[];
-}
 
 static const int SCREEN_WIDTH = 800;
 static const int SCREEN_HEIGHT = 600;
 
-static const int ASCII_DISPLAY_LOW = 32;
-static const int ASCII_DISPLAY_HIGH = 127;
+struct Cursor
+{
+    int line_idx = 0;
+    int col_idx  = 0;
+};
 
-static const int FONT_WIDTH = 128;
-static const int FONT_HEIGHT = 64;
-static const int FONT_COLS = 18;
-static const int FONT_ROWS = 7;
-static const int FONT_CHAR_WIDTH = (FONT_WIDTH / FONT_COLS);
-static const int FONT_CHAR_HEIGHT = (FONT_HEIGHT / FONT_ROWS);
-static const int FONT_SCALE = 2;
+using TextLine = std::pair<size_t, std::string>;
+using Buffer = std::vector<TextLine>;
+class Editor
+{
+public:
+    static Editor& getInstance()
+    {
+	static Editor editor;
+	return editor;
+    }
+    
+    void insertTextOnCursor(const std::string& text);
+    void backspace();
+    void createNewline();
+    void handleKeyAction(int key);
+    void cursorMoveLeft();
+    void cursorMoveRight();
+    
+    const Buffer& getBuffer() const { return buffer; }
+    const Cursor& getCursor() const { return cursor; }
+    
+    Editor(const Editor&) = delete;
+    Editor& operator=(const Editor&) = delete;
+private:
+    Editor();
+    ~Editor() = default;
 
-static const int BUFFER_CAP = 1024;
+    static const size_t BUFFER_CAP = 1024;    
+    Buffer buffer;
+    Cursor cursor;
+};
