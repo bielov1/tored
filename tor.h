@@ -22,7 +22,7 @@ struct Cursor
     int col_idx  = 0;
 };
 
-using TextLine = std::pair<size_t, std::string>;
+using TextLine = std::pair<std::size_t, std::string>;
 using Buffer = std::vector<TextLine>;
 class Editor
 {
@@ -33,7 +33,7 @@ public:
 	return editor;
     }
     
-    void insertTextOnCursor(std::string_view text);
+    void insertTextOnCursor(const std::string& text, std::size_t text_size, int col_idx, int line_idx);
     void backspace();
     void createNewline();
     void handleKeyAction(int key);
@@ -41,7 +41,7 @@ public:
     void cursorMoveRight();
     
     const Buffer& getBuffer() const { return buffer; }
-    const Cursor& getCursor() const { return cursor; }
+    Cursor& getCursor() { return cursor; }
     
     Editor(const Editor&) = delete;
     Editor& operator=(const Editor&) = delete;

@@ -10,11 +10,10 @@ Editor::Editor()
     buffer.emplace_back(0, "");
 }
 
-void Editor::insertTextOnCursor(std::string_view text)
-{    
-    buffer[cursor.line_idx].second.insert(cursor.col_idx, text.data(), 0, text.size());
-    buffer[cursor.line_idx].first += text.size();
-    cursor.col_idx += text.size();
+void Editor::insertTextOnCursor(const std::string& text, std::size_t text_size, int col_idx, int line_idx)
+{
+    buffer[line_idx].second.insert(col_idx, text, 0, text_size);
+    buffer[line_idx].first += text_size;
 }
 
 void Editor::handleKeyAction(int key)
@@ -37,7 +36,7 @@ void Editor::handleKeyAction(int key)
     }
 }
 // abcde
-// fghijklmnop
+// |fghijklmnop
 // ^ cursor
 // after backspace()
 //
@@ -45,12 +44,19 @@ void Editor::handleKeyAction(int key)
 //      ^ cursor
 void Editor::backspace()
 {
-    // TODO: all characters on cursor.line_idx should be moved to upper line if cursor.col_idx == 0
-    // free line or shift cursor.line_idx < upper by one line.
     if (cursor.col_idx > 0) {
-	buffer[cursor.line_idx].second.erase(cursor.col_idx - 1, 1);
-	buffer[cursor.line_idx].first -= 1;
 	cursor.col_idx -= 1;
+	buffer[cursor.line_idx].second.erase(cursor.col_idx, 1);
+	buffer[cursor.line_idx].first -= 1;
+    } else {
+	if (cursor.line_idx > 0) {
+	    auto& [line_size, line] = buffer[cursor.line_idx];
+	    std::size_t prev_line_size = buffer[cursor.line_idx - 1].first;
+	    insertTextOnCursor(std::move(line), line_size, prev_line_size, cursor.line_idx - 1);
+	    buffer.erase(buffer.begin() + cursor.line_idx);
+	    cursor.line_idx -= 1;
+	    cursor.col_idx = prev_line_size;
+	}
     }
 }
 
@@ -122,7 +128,10 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
 void charCallback(GLFWwindow* window, unsigned int codepoint)
 {
     (void)window;
-    Editor::getInstance().insertTextOnCursor(std::string{(char)codepoint});
+    Editor& editor = Editor::getInstance();
+    Cursor& cursor = editor.getCursor();
+    editor.insertTextOnCursor(std::string{(char)codepoint}, 1, cursor.col_idx, cursor.line_idx);
+    cursor.col_idx += 1;
 }
 
 int main()
