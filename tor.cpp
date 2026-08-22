@@ -96,7 +96,7 @@ void Editor::cursorMoveLeft()
 
 void Editor::cursorMoveRight()
 {
-    if (cursor.col_idx < static_cast<int>(buffer[cursor.line_idx].first)) {
+    if (cursor.col_idx < buffer[cursor.line_idx].first) {
         cursor.col_idx += 1;
     } else {
 	if (cursor.line_idx < buffer.size() - 1) {

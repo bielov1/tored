@@ -18,8 +18,8 @@ static const int SCREEN_HEIGHT = 600;
 
 struct Cursor
 {
-    int line_idx = 0;
-    int col_idx  = 0;
+    std::size_t line_idx = 0;
+    std::size_t col_idx  = 0;
 };
 
 using TextLine = std::pair<std::size_t, std::string>;
