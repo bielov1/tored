@@ -10,12 +10,11 @@ Editor::Editor()
     buffer.emplace_back(0, "");
 }
 
-void Editor::insertTextOnCursor(const std::string& text)
+void Editor::insertTextOnCursor(std::string_view text)
 {    
-    const std::size_t text_size = text.size();
-    buffer[cursor.line_idx].second.insert(cursor.col_idx, text, 0, text_size);
-    buffer[cursor.line_idx].first += text_size;
-    cursor.col_idx += text_size;    
+    buffer[cursor.line_idx].second.insert(cursor.col_idx, text.data(), 0, text.size());
+    buffer[cursor.line_idx].first += text.size();
+    cursor.col_idx += text.size();
 }
 
 void Editor::handleKeyAction(int key)
@@ -37,7 +36,13 @@ void Editor::handleKeyAction(int key)
 	std::fprintf(stderr, "[WARNING] uknown key input\n");
     }
 }
-
+// abcde
+// fghijklmnop
+// ^ cursor
+// after backspace()
+//
+// abcdefghijklmop
+//      ^ cursor
 void Editor::backspace()
 {
     // TODO: all characters on cursor.line_idx should be moved to upper line if cursor.col_idx == 0
@@ -49,10 +54,24 @@ void Editor::backspace()
     }
 }
 
+// abcdefghijklmnop
+//      ^ cursor
+// after createNewline()
+// abcde
+// fghijklmnop
+
+// a|abc
 void Editor::createNewline()
 {
-    // TODO: at cursor pos move to next line characters after it
-    buffer.emplace(buffer.begin() + cursor.line_idx + 1, 0, "");
+    auto& [line_size, line] = buffer[cursor.line_idx];
+
+    std::string rest = line.substr(cursor.col_idx);
+
+    line.erase(cursor.col_idx);
+    line_size = cursor.col_idx;
+
+    buffer.emplace(buffer.begin() + cursor.line_idx + 1, rest.size(), std::move(rest)); 
+
     cursor.line_idx += 1;
     cursor.col_idx = 0;
 }

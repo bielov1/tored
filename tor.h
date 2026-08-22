@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cassert>
 #include <vector>
+#include <string_view>
 
 #include "raylib.h"
 #define GRAPHICS_API_OPENGL_33
@@ -32,7 +33,7 @@ public:
 	return editor;
     }
     
-    void insertTextOnCursor(const std::string& text);
+    void insertTextOnCursor(std::string_view text);
     void backspace();
     void createNewline();
     void handleKeyAction(int key);
