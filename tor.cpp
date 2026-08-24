@@ -6,8 +6,8 @@ Editor::Editor()
     : buffer{}
     , cursor{}
 {
-    buffer.reserve(BUFFER_CAP);
-    buffer.emplace_back(0, "");
+    //buffer.reserve(BUFFER_CAP);
+    //buffer.emplace_back(0, "");
 }
 
 void Editor::insertTextOnCursor(const std::string& text, std::size_t text_size, int col_idx, int line_idx)
@@ -16,26 +16,30 @@ void Editor::insertTextOnCursor(const std::string& text, std::size_t text_size, 
     buffer[line_idx].first += text_size;
 }
 
-void Editor::handleKeyAction(int key)
+void Editor::handleKeyAction(KeyInputTag key)
 {
+    static_assert(KeyInputTag::__static_key_input_tag_count == 7);
     switch (key) {
-    case GLFW_KEY_BACKSPACE:
+    case KeyInputTag::KIT_BACKSPACE:
 	backspaceOnCursor();
 	break;
-    case GLFW_KEY_ENTER:
+    case KeyInputTag::KIT_ENTER:
 	newlineOnCursor();
 	break;
-    case GLFW_KEY_LEFT:
+    case KeyInputTag::KIT_LEFT:
 	moveCursorLeft();
 	break;
-    case GLFW_KEY_RIGHT:
+    case KeyInputTag::KIT_RIGHT:
 	moveCursorRight();
 	break;
-    case GLFW_KEY_UP:
+    case KeyInputTag::KIT_UP:
 	moveCursorUp();
 	break;
-    case GLFW_KEY_DOWN:
+    case KeyInputTag::KIT_DOWN:
 	moveCursorDown();
+	break;
+    case KeyInputTag::KIT_F5:
+	saveToFile(std::string{"output"});
 	break;
     default:
 	std::fprintf(stderr, "[WARNING] uknown key input\n");
@@ -94,7 +98,6 @@ void Editor::moveCursorLeft()
         cursor.col_idx -= 1;
     } else {
 	if (cursor.line_idx > 0) {
-	    // cursor.add(Vec2f{-1, })
             cursor.line_idx -= 1;
             cursor.col_idx = buffer[cursor.line_idx].first;
         }
@@ -133,30 +136,67 @@ void Editor::moveCursorDown()
     }
 }
 
+void Editor::saveToFile(const std::string& file_path)
+{
+    std::ofstream ofs{file_path, std::ios_base::binary};
+    if (!ofs) {
+        throw std::runtime_error("Failed to open file: " + file_path);
+    }
+    
+    for (std::size_t i = 0; i < buffer.size(); ++i) {
+	const auto& [size, line] = buffer[i];
+	ofs.write(line.data(), size);
+	ofs.put('\n');
+    }
+    std::print(stdout, "[INFO] Successfully save buffer content to file: {}\n", file_path);
+}
+
+void Editor::loadFromFile(const std::string& file_path)
+{
+    assert(buffer.size() == 0 && "Buffer should be empty.");
+    std::ifstream ifs{file_path, std::ios_base::binary | std::ios_base::ate};
+    if (!ifs) throw std::runtime_error("Failed to open file: " + file_path);
+
+    std::string content(ifs.tellg(), '\0');
+    ifs.seekg(0, std::ios::beg);
+    ifs.read(content.data(), content.size());
+
+    buffer = content 
+           | std::views::split('\n')
+           | std::views::transform([](auto&& range) {
+                 std::string_view sv{range.begin(), range.end()};
+                 return TextLine{ sv.size(), std::string(sv) };
+             })
+           | std::ranges::to<Buffer>();
+}
+
 void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) 
 {
     (void)window;
     (void)scancode;
     (void)mods;
+    static_assert(KeyInputTag::__static_key_input_tag_count == 7);
     if (key == GLFW_KEY_BACKSPACE && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
-	Editor::getInstance().handleKeyAction(GLFW_KEY_BACKSPACE);
+	Editor::getInstance().handleKeyAction(KeyInputTag::KIT_BACKSPACE);
     }
     if (key == GLFW_KEY_ENTER && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
-        Editor::getInstance().handleKeyAction(GLFW_KEY_ENTER);
+        Editor::getInstance().handleKeyAction(KeyInputTag::KIT_ENTER);
     }
     if (key == GLFW_KEY_LEFT && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
-        Editor::getInstance().handleKeyAction(GLFW_KEY_LEFT);
+        Editor::getInstance().handleKeyAction(KeyInputTag::KIT_LEFT);
     }
     if (key == GLFW_KEY_RIGHT && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
-        Editor::getInstance().handleKeyAction(GLFW_KEY_RIGHT);
+        Editor::getInstance().handleKeyAction(KeyInputTag::KIT_RIGHT);
     }
     if (key == GLFW_KEY_UP && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
-        Editor::getInstance().handleKeyAction(GLFW_KEY_UP);
+        Editor::getInstance().handleKeyAction(KeyInputTag::KIT_UP);
     }
     if (key == GLFW_KEY_DOWN && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
-        Editor::getInstance().handleKeyAction(GLFW_KEY_DOWN);
+        Editor::getInstance().handleKeyAction(KeyInputTag::KIT_DOWN);
     }
-    
+    if (key == GLFW_KEY_F5 && action == GLFW_PRESS) {
+        Editor::getInstance().handleKeyAction(KeyInputTag::KIT_F5);
+    }    
 }
 
 void charCallback(GLFWwindow* window, unsigned int codepoint)
@@ -169,16 +209,20 @@ void charCallback(GLFWwindow* window, unsigned int codepoint)
 }
 
 int main(int argc, char *argv[])
-{       
+{
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "");
-    Editor& editor = Editor::getInstance();
-    Renderer& renderer = Renderer::getInstance();
-
+    
     GLFWwindow *ctx = glfwGetCurrentContext(); 
     glfwSetKeyCallback(ctx, keyCallback);
     glfwSetCharCallback(ctx, charCallback);
     
     SetTargetFPS(60);
+    
+    Editor& editor = Editor::getInstance();
+    Renderer& renderer = Renderer::getInstance();
+
+    std::string load_file_name = "la.cpp";
+    editor.loadFromFile(load_file_name);
 
     while (!WindowShouldClose()) {
 	BeginDrawing();
