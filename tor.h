@@ -1,9 +1,12 @@
 #pragma once
 
 #include <print>
+#include <cstdio>
 #include <cstddef>
 #include <cassert>
 #include <vector>
+#include <fstream>
+#include <ios>
 #include <string_view>
 
 #include "raylib.h"
@@ -41,6 +44,8 @@ public:
     void moveCursorRight();
     void moveCursorUp();
     void moveCursorDown();
+
+    void saveToFile(const std::string& file_path);
     
     const Buffer& getBuffer() const { return buffer; }
     Cursor& getCursor() { return cursor; }

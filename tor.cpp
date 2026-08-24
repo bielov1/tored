@@ -37,6 +37,10 @@ void Editor::handleKeyAction(int key)
     case GLFW_KEY_DOWN:
 	moveCursorDown();
 	break;
+    case GLFW_KEY_F5:
+	std::fprintf(stdout, "F5 was pressed\n");
+	saveToFile(std::string{"output"});
+	break;
     default:
 	std::fprintf(stderr, "[WARNING] uknown key input\n");
     }
@@ -94,7 +98,6 @@ void Editor::moveCursorLeft()
         cursor.col_idx -= 1;
     } else {
 	if (cursor.line_idx > 0) {
-	    // cursor.add(Vec2f{-1, })
             cursor.line_idx -= 1;
             cursor.col_idx = buffer[cursor.line_idx].first;
         }
@@ -133,6 +136,20 @@ void Editor::moveCursorDown()
     }
 }
 
+void Editor::saveToFile(const std::string& file_path)
+{
+    std::FILE *f = std::fopen(file_path.c_str(), "w+");
+    
+    for (std::size_t i = 0; i < buffer.size(); ++i) {
+	auto& [size, line] = buffer[i];
+	std::fwrite(line.c_str(), 1, size, f);
+	std::fputc('\n', f);
+    }
+    std::fclose(f);
+
+    std::print(stdout, "[INFO] Successfully save buffer contet to file: {}\n", file_path);
+}
+
 void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) 
 {
     (void)window;
@@ -156,7 +173,9 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
     if (key == GLFW_KEY_DOWN && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
         Editor::getInstance().handleKeyAction(GLFW_KEY_DOWN);
     }
-    
+    if (key == GLFW_KEY_F5 && action == GLFW_PRESS) {
+        Editor::getInstance().handleKeyAction(GLFW_KEY_F5);
+    }    
 }
 
 void charCallback(GLFWwindow* window, unsigned int codepoint)
