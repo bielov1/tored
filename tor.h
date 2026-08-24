@@ -34,11 +34,13 @@ public:
     }
     
     void insertTextOnCursor(const std::string& text, std::size_t text_size, int col_idx, int line_idx);
-    void backspace();
-    void createNewline();
+    void backspaceOnCursor();
+    void newlineOnCursor();
     void handleKeyAction(int key);
-    void cursorMoveLeft();
-    void cursorMoveRight();
+    void moveCursorLeft();
+    void moveCursorRight();
+    void moveCursorUp();
+    void moveCursorDown();
     
     const Buffer& getBuffer() const { return buffer; }
     Cursor& getCursor() { return cursor; }

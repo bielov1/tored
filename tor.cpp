@@ -20,16 +20,22 @@ void Editor::handleKeyAction(int key)
 {
     switch (key) {
     case GLFW_KEY_BACKSPACE:
-	backspace();
+	backspaceOnCursor();
 	break;
     case GLFW_KEY_ENTER:
-	createNewline();
+	newlineOnCursor();
 	break;
     case GLFW_KEY_LEFT:
-	cursorMoveLeft();
+	moveCursorLeft();
 	break;
     case GLFW_KEY_RIGHT:
-	cursorMoveRight();
+	moveCursorRight();
+	break;
+    case GLFW_KEY_UP:
+	moveCursorUp();
+	break;
+    case GLFW_KEY_DOWN:
+	moveCursorDown();
 	break;
     default:
 	std::fprintf(stderr, "[WARNING] uknown key input\n");
@@ -42,7 +48,7 @@ void Editor::handleKeyAction(int key)
 //
 // abcdefghijklmop
 //      ^ cursor
-void Editor::backspace()
+void Editor::backspaceOnCursor()
 {
     if (cursor.col_idx > 0) {
 	cursor.col_idx -= 1;
@@ -67,7 +73,7 @@ void Editor::backspace()
 // fghijklmnop
 
 // a|abc
-void Editor::createNewline()
+void Editor::newlineOnCursor()
 {
     auto& [line_size, line] = buffer[cursor.line_idx];
 
@@ -82,19 +88,20 @@ void Editor::createNewline()
     cursor.col_idx = 0;
 }
 
-void Editor::cursorMoveLeft()
+void Editor::moveCursorLeft()
 {
     if (cursor.col_idx > 0) {
         cursor.col_idx -= 1;
     } else {
 	if (cursor.line_idx > 0) {
+	    // cursor.add(Vec2f{-1, })
             cursor.line_idx -= 1;
             cursor.col_idx = buffer[cursor.line_idx].first;
         }
     }
 }
 
-void Editor::cursorMoveRight()
+void Editor::moveCursorRight()
 {
     if (cursor.col_idx < buffer[cursor.line_idx].first) {
         cursor.col_idx += 1;
@@ -103,6 +110,26 @@ void Editor::cursorMoveRight()
             cursor.line_idx += 1;
             cursor.col_idx  = 0;
         }
+    }
+}
+
+void Editor::moveCursorUp()
+{
+    if (cursor.line_idx > 0) {
+	cursor.line_idx -= 1;
+	if (buffer[cursor.line_idx].first < cursor.col_idx) {
+	    cursor.col_idx = buffer[cursor.line_idx].first;
+	}   
+    }
+}
+
+void Editor::moveCursorDown()
+{
+    if (cursor.line_idx < buffer.size() - 1) {
+	cursor.line_idx += 1;
+	if (buffer[cursor.line_idx].first < cursor.col_idx) {
+	    cursor.col_idx = buffer[cursor.line_idx].first;	    
+	}
     }
 }
 
@@ -123,6 +150,13 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
     if (key == GLFW_KEY_RIGHT && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
         Editor::getInstance().handleKeyAction(GLFW_KEY_RIGHT);
     }
+    if (key == GLFW_KEY_UP && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
+        Editor::getInstance().handleKeyAction(GLFW_KEY_UP);
+    }
+    if (key == GLFW_KEY_DOWN && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
+        Editor::getInstance().handleKeyAction(GLFW_KEY_DOWN);
+    }
+    
 }
 
 void charCallback(GLFWwindow* window, unsigned int codepoint)
@@ -134,7 +168,7 @@ void charCallback(GLFWwindow* window, unsigned int codepoint)
     cursor.col_idx += 1;
 }
 
-int main()
+int main(int argc, char *argv[])
 {       
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "");
     Editor& editor = Editor::getInstance();
