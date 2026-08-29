@@ -1,18 +1,4 @@
-#include "renderer.h"
-
-Renderer::Renderer()
-    : font{}
-{
-    size_t font_size = _binary_charmap_oldschool_white_png_end - _binary_charmap_oldschool_white_png_start;
-    unsigned char *font_data = (unsigned char *)_binary_charmap_oldschool_white_png_start;
-    std::span<const unsigned char> data_view{font_data, font_size};
-    font = loadPNGDataAsFont(data_view, FONT_COLS, FONT_ROWS);
-}
-
-Renderer::~Renderer()
-{
-    UnloadFont(font);
-}
+#include "graphic.h"
 
 void Renderer::renderChar(char c, Vec2f pos, Color color = FONT_COLOR)
 {
@@ -88,51 +74,8 @@ void Renderer::renderScene(const Buffer& buffer, const Cursor& cursor, Vec2f sta
     renderCursor(cursor, current_line, start_pos, char_width, char_height);
 }
 
-Font Renderer::loadPNGDataAsFont(std::span<const unsigned char> data, int cols, int rows)
+
+void BufferView::draw(Font font)
 {
-    Font font{};
-    Image image = LoadImageFromMemory(".png", data.data(), data.size());
-    if (!IsImageValid(image)) {
-	std::fprintf(stderr, "[ERROR] could not load image from memory\n");
-	exit(1);
-    }
-    
-    ImageFormat(&image, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
-    ImageColorReplace(&image, BLACK, BLANK);
-    
-    font.baseSize = image.height / rows;
-    font.glyphCount = cols * rows;
-    font.glyphPadding = 0;
-    font.texture = LoadTextureFromImage(image);
-    
-    font.recs = (Rectangle*)RL_MALLOC(font.glyphCount * sizeof(Rectangle));
-    font.glyphs = (GlyphInfo*)RL_MALLOC(font.glyphCount * sizeof(GlyphInfo));
-    
-    for (int i = 0; i < font.glyphCount; ++i) {
-	int col = i % cols;
-	int row = i / cols;
-
-	Rectangle rec = {
-	    static_cast<float>(col * FONT_CHAR_WIDTH),
-	    static_cast<float>(row * FONT_CHAR_HEIGHT),
-	    static_cast<float>(FONT_CHAR_WIDTH),
-	    static_cast<float>(FONT_CHAR_HEIGHT)
-	};
-	
-	font.glyphs[i].value = ASCII_DISPLAY_LOW + i;
-	font.glyphs[i].offsetX = 0;
-	font.glyphs[i].offsetY = 0;
-	font.glyphs[i].advanceX = FONT_CHAR_WIDTH;
-	font.glyphs[i].image = ImageFromImage(image, rec);
-	font.recs[i] = rec;
-    }
-
-    if (!IsFontValid(font)) {
-	std::fprintf(stderr, "font is invalid.\n");
-	exit(1);
-    }
-
-    
-    UnloadImage(image);
-    return font;
+    //TODO: implement
 }

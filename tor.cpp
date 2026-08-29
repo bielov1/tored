@@ -1,13 +1,22 @@
 #include <iostream>
 #include "tor.h"
-#include "renderer.h"
+
 
 Editor::Editor()
-    : buffer{}
-    , cursor{}
+    : graphic{}
+    , font{}
 {
-    //buffer.reserve(BUFFER_CAP);
-    //buffer.emplace_back(0, "");
+    size_t font_size = _binary_charmap_oldschool_white_png_end - _binary_charmap_oldschool_white_png_start;
+    unsigned char *font_data = (unsigned char *)_binary_charmap_oldschool_white_png_start;
+    std::span<const unsigned char> data_view{font_data, font_size};
+    font = loadPNGDataAsFont(data_view, FONT_COLS, FONT_ROWS);
+
+    createNewWindow(SCREEN_WIDTH, SCREEN_HEIGHT);
+}
+
+Editor::~Editor()
+{
+    UnloadFont(font);
 }
 
 void Editor::insertTextOnCursor(const std::string& text, std::size_t text_size, int col_idx, int line_idx)
@@ -52,7 +61,7 @@ void Editor::handleKeyAction(KeyInputTag key)
 //
 // abcdefghijklmop
 //      ^ cursor
-void Editor::backspaceOnCursor()
+void Editor::backspaceOnCursor()jj
 {
     if (cursor.col_idx > 0) {
 	cursor.col_idx -= 1;
@@ -136,6 +145,41 @@ void Editor::moveCursorDown()
     }
 }
 
+void Editor::createNewWindow(int window_width, int window_height)
+{
+    auto new_window = std::make_shared<Window>();
+    
+    auto new_buffer = std::make_shared<Buffer>("Hello World!");
+    
+    auto new_cursor = std::make_shared<Cursor>();
+    
+    auto buffer_view = std::make_shared<BufferView>(
+	ViewPort{
+	    .first_visible_line = 0,
+	    .first_visible_col  = 0,
+	    .visible_lines = window_height / FONT_HEIGHT,
+	    .visible_cols  = window_width / FONT_WIDTH
+	},
+	new_buffer, new_cursor);
+    
+    new_window->add(buffer_view);
+    
+    open_windows.push_back(new_window);
+    active_window = new_window;
+}
+
+inline std::shared_ptr<Window> Editor::getActiveWindow()
+{
+    return active_window;
+}
+
+void Editor::refreshScreen()
+{
+    if (active_window) {
+	active_window->draw(font);
+    }
+}
+
 void Editor::saveToFile(const std::string& file_path)
 {
     std::ofstream ofs{file_path, std::ios_base::binary};
@@ -168,6 +212,55 @@ void Editor::loadFromFile(const std::string& file_path)
                  return TextLine{ sv.size(), std::string(sv) };
              })
            | std::ranges::to<Buffer>();
+}
+
+Font Editor::loadPNGDataAsFont(std::span<const unsigned char> data, int cols, int rows)
+{
+    Font font{};
+    Image image = LoadImageFromMemory(".png", data.data(), data.size());
+    if (!IsImageValid(image)) {
+	std::fprintf(stderr, "[ERROR] could not load image from memory\n");
+	exit(1);
+    }
+    
+    ImageFormat(&image, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
+    ImageColorReplace(&image, BLACK, BLANK);
+    
+    font.baseSize = image.height / rows;
+    font.glyphCount = cols * rows;
+    font.glyphPadding = 0;
+    font.texture = LoadTextureFromImage(image);
+    
+    font.recs = (Rectangle*)RL_MALLOC(font.glyphCount * sizeof(Rectangle));
+    font.glyphs = (GlyphInfo*)RL_MALLOC(font.glyphCount * sizeof(GlyphInfo));
+    
+    for (int i = 0; i < font.glyphCount; ++i) {
+	int col = i % cols;
+	int row = i / cols;
+
+	Rectangle rec = {
+	    static_cast<float>(col * FONT_CHAR_WIDTH),
+	    static_cast<float>(row * FONT_CHAR_HEIGHT),
+	    static_cast<float>(FONT_CHAR_WIDTH),
+	    static_cast<float>(FONT_CHAR_HEIGHT)
+	};
+	
+	font.glyphs[i].value = ASCII_DISPLAY_LOW + i;
+	font.glyphs[i].offsetX = 0;
+	font.glyphs[i].offsetY = 0;
+	font.glyphs[i].advanceX = FONT_CHAR_WIDTH;
+	font.glyphs[i].image = ImageFromImage(image, rec);
+	font.recs[i] = rec;
+    }
+
+    if (!IsFontValid(font)) {
+	std::fprintf(stderr, "font is invalid.\n");
+	exit(1);
+    }
+
+    
+    UnloadImage(image);
+    return font;
 }
 
 void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) 
@@ -219,15 +312,15 @@ int main(int argc, char *argv[])
     SetTargetFPS(60);
     
     Editor& editor = Editor::getInstance();
-    Renderer& renderer = Renderer::getInstance();
 
-    std::string load_file_name = "la.cpp";
-    editor.loadFromFile(load_file_name);
+    // std::string load_file_name = "la.cpp";
+    // editor.loadFromFile(load_file_name);
 
     while (!WindowShouldClose()) {
 	BeginDrawing();
 	ClearBackground(Color{ 0x18, 0x18, 0x18, 0x0 });
-	renderer.renderScene(editor.getBuffer(), editor.getCursor(), Vec2f{ 0.0f, 0.0f });
+	//renderer.renderScene(editor.getBuffer(), editor.getCursor(), Vec2f{ 0.0f, 0.0f });
+	editor.refreshScreen();
         EndDrawing();
     }
     
