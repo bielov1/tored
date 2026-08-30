@@ -1,99 +1,81 @@
 #pragma once
-#include <vector>
+
 #include <memory>
+#include <cassert>
+
+#include "raylib.h"
+#include "buffer.h"
+#include "cursor.h"
+#include "la.h"
+
+struct ViewPort
+{
+    std::size_t first_visible_line;
+    std::size_t first_visible_col;
+    std::size_t visible_lines;
+    std::size_t visible_cols;
+};
 
 class Graphic
 {
 public:
-    virtual ~Graphic();
+    virtual ~Graphic() = default;
     
-    virtual void draw(Font font) = 0;
+    virtual void draw(Font font, int scale) = 0;
     
-    virtual add(std::shared_ptr<Graphic> component) {}
-    virtual remove(std::shared_ptr<Graphic> component) {}
+    virtual void add(std::shared_ptr<Graphic> component) {}
+    //virtual remove(std::shared_ptr<Graphic> component) {}
 };
-
-using Line = std::pair<std::size_t, std::string>;
-using Text = std::vector<Line>;
-
-struct ViewPort
-{
-    int first_visible_line;
-    int first_visible_col;
-    int visible_lines;
-    int visible_cols;
-};
-
 
 class BufferView : public Graphic
 {
 public:
-    BufferView(ViewPort vp, std::shared_ptr<Buffer> b, std::shared_ptr<Cursor> c) 
-        : view_port{vp}
+    BufferView(ViewPort *vp,
+	       Buffer *b,
+	       Cursor *c)
+        : view_port(vp)
 	, buffer(b)
 	, cursor(c)
     {}
     
-    void draw(Font font) override;
-    ViewPort& getViewPort() { return view_port; }
+    void drawChar(Font font, char c, Vec2f pos, int scale, Color color);    
+    void draw(Font font, int scale) override;
 private:    
-    ViewPort view_port;
-    std::shared_ptr<Buffer> buffer;
-    std::shared_ptr<Curosr> cursor;
+    ViewPort *view_port;
+    Buffer *buffer;
+    Cursor *cursor;
 };
-
-class Buffer// , public Observer
-{
-public:
-    Buffer(std::string text)
-	: text{}
-    {
-	text.emplace_back(text.size(), std::move(text));
-    }
-
-    Text& getText() { return text; }
-    //void update() override;
-private:
-    Text text;
-};
-
-class Cursor//, public Observer
-{
-public:
-    std::size_t getLine() const { return line_idx; }
-    std::size_t getCol() const { return col_idx; }
-    //void move(std::size_t line, std::size_t col) { line_idx = line; col_idx = col; }
-    //void update() override;
-
-private:
-    std::size_t line_idx = 0;
-    std::size_t col_idx  = 0;
-}
-
-// TODO: potential classes to add
-// class ScrollBar : public Graphic
-// {
-// };
-
-// class InfoLine : public Graphic
-// {
-
-// };
 
 class Window : public Graphic
 {
 public:
+    Window(std::unique_ptr<ViewPort> vp,
+	   std::unique_ptr<Buffer> b,
+	   std::unique_ptr<Cursor> c)
+        : view_port(std::move(vp))
+	, buffer(std::move(b))
+        , cursor(std::move(c))
+    {}
+    
     ~Window() override = default;
 
-    void draw(Font font) override {
+    void draw(Font font, int scale) override {
         for (auto& child : graphics) {
-            child->draw(font);
+            child->draw(font, scale);
         }
     }
-    add(std::shared_ptr<Graphic> component) override {
+    void add(std::shared_ptr<Graphic> component) override {
 	graphics.push_back(component);
     }
     //remove(std::shared_ptr<Graphic> component) override {}
+
+    ViewPort& getViewPort() const { return *view_port; }
+    Buffer& getBuffer() const { return *buffer; }
+    Cursor& getCursor() const { return *cursor; }    
  private:
     std::vector<std::shared_ptr<Graphic>> graphics;
+
+    std::unique_ptr<ViewPort> view_port;
+    std::unique_ptr<Buffer> buffer;
+    std::unique_ptr<Cursor> cursor;
 };

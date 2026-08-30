@@ -1,9 +1,8 @@
 #include <iostream>
 #include "tor.h"
 
-
 Editor::Editor()
-    : graphic{}
+    : max_scroll_line{0}
     , font{}
 {
     size_t font_size = _binary_charmap_oldschool_white_png_end - _binary_charmap_oldschool_white_png_start;
@@ -19,22 +18,16 @@ Editor::~Editor()
     UnloadFont(font);
 }
 
-void Editor::insertTextOnCursor(const std::string& text, std::size_t text_size, int col_idx, int line_idx)
-{
-    buffer[line_idx].second.insert(col_idx, text, 0, text_size);
-    buffer[line_idx].first += text_size;
-}
-
 void Editor::handleKeyAction(KeyInputTag key)
 {
     static_assert(KeyInputTag::__static_key_input_tag_count == 7);
     switch (key) {
-    case KeyInputTag::KIT_BACKSPACE:
-	backspaceOnCursor();
-	break;
-    case KeyInputTag::KIT_ENTER:
-	newlineOnCursor();
-	break;
+    // case KeyInputTag::KIT_BACKSPACE:
+    // 	backspaceOnCursor();
+    // 	break;
+    // case KeyInputTag::KIT_ENTER:
+    // 	newlineOnCursor();
+    // 	break;
     case KeyInputTag::KIT_LEFT:
 	moveCursorLeft();
 	break;
@@ -47,120 +40,40 @@ void Editor::handleKeyAction(KeyInputTag key)
     case KeyInputTag::KIT_DOWN:
 	moveCursorDown();
 	break;
-    case KeyInputTag::KIT_F5:
-	saveToFile(std::string{"output"});
-	break;
+    // case KeyInputTag::KIT_F5:
+    // 	saveToFile(std::string{"output"});
+    // 	break;
     default:
 	std::fprintf(stderr, "[WARNING] uknown key input\n");
-    }
-}
-// abcde
-// |fghijklmnop
-// ^ cursor
-// after backspace()
-//
-// abcdefghijklmop
-//      ^ cursor
-void Editor::backspaceOnCursor()jj
-{
-    if (cursor.col_idx > 0) {
-	cursor.col_idx -= 1;
-	buffer[cursor.line_idx].second.erase(cursor.col_idx, 1);
-	buffer[cursor.line_idx].first -= 1;
-    } else {
-	if (cursor.line_idx > 0) {
-	    auto& [line_size, line] = buffer[cursor.line_idx];
-	    std::size_t prev_line_size = buffer[cursor.line_idx - 1].first;
-	    insertTextOnCursor(std::move(line), line_size, prev_line_size, cursor.line_idx - 1);
-	    buffer.erase(buffer.begin() + cursor.line_idx);
-	    cursor.line_idx -= 1;
-	    cursor.col_idx = prev_line_size;
-	}
-    }
-}
-
-// abcdefghijklmnop
-//      ^ cursor
-// after createNewline()
-// abcde
-// fghijklmnop
-
-// a|abc
-void Editor::newlineOnCursor()
-{
-    auto& [line_size, line] = buffer[cursor.line_idx];
-
-    std::string rest = line.substr(cursor.col_idx);
-
-    line.erase(cursor.col_idx);
-    line_size = cursor.col_idx;
-
-    buffer.emplace(buffer.begin() + cursor.line_idx + 1, rest.size(), std::move(rest)); 
-
-    cursor.line_idx += 1;
-    cursor.col_idx = 0;
-}
-
-void Editor::moveCursorLeft()
-{
-    if (cursor.col_idx > 0) {
-        cursor.col_idx -= 1;
-    } else {
-	if (cursor.line_idx > 0) {
-            cursor.line_idx -= 1;
-            cursor.col_idx = buffer[cursor.line_idx].first;
-        }
-    }
-}
-
-void Editor::moveCursorRight()
-{
-    if (cursor.col_idx < buffer[cursor.line_idx].first) {
-        cursor.col_idx += 1;
-    } else {
-	if (cursor.line_idx < buffer.size() - 1) {
-            cursor.line_idx += 1;
-            cursor.col_idx  = 0;
-        }
-    }
-}
-
-void Editor::moveCursorUp()
-{
-    if (cursor.line_idx > 0) {
-	cursor.line_idx -= 1;
-	if (buffer[cursor.line_idx].first < cursor.col_idx) {
-	    cursor.col_idx = buffer[cursor.line_idx].first;
-	}   
-    }
-}
-
-void Editor::moveCursorDown()
-{
-    if (cursor.line_idx < buffer.size() - 1) {
-	cursor.line_idx += 1;
-	if (buffer[cursor.line_idx].first < cursor.col_idx) {
-	    cursor.col_idx = buffer[cursor.line_idx].first;	    
-	}
     }
 }
 
 void Editor::createNewWindow(int window_width, int window_height)
 {
-    auto new_window = std::make_shared<Window>();
-    
-    auto new_buffer = std::make_shared<Buffer>("Hello World!");
-    
-    auto new_cursor = std::make_shared<Cursor>();
-    
-    auto buffer_view = std::make_shared<BufferView>(
-	ViewPort{
+    auto new_view_port = std::make_unique<ViewPort>(ViewPort{
 	    .first_visible_line = 0,
 	    .first_visible_col  = 0,
-	    .visible_lines = window_height / FONT_HEIGHT,
-	    .visible_cols  = window_width / FONT_WIDTH
-	},
-	new_buffer, new_cursor);
+	    .visible_lines = static_cast<std::size_t>(window_height / (FONT_CHAR_HEIGHT * FONT_SCALE)),
+	    .visible_cols  = static_cast<std::size_t>(window_width / (FONT_CHAR_WIDTH * FONT_SCALE))
+	});    
+    auto new_buffer = std::make_unique<Buffer>();
+    for (int i = 0; i < 100; ++i) {
+	new_buffer->insertLine(std::to_string(i));
+	new_buffer->insertLine("Hello World!");
+    }
+    auto new_cursor = std::make_unique<Cursor>();
+    
+    auto new_window = std::make_shared<Window>(
+	     std::move(new_view_port),
+	     std::move(new_buffer),
+	     std::move(new_cursor)
+	);
+
+    auto buffer_view = std::make_shared<BufferView>(
+	&new_window->getViewPort(),
+	&new_window->getBuffer(),
+	&new_window->getCursor()
+    );
     
     new_window->add(buffer_view);
     
@@ -168,51 +81,170 @@ void Editor::createNewWindow(int window_width, int window_height)
     active_window = new_window;
 }
 
-inline std::shared_ptr<Window> Editor::getActiveWindow()
+void Editor::moveCursorLeft()
 {
-    return active_window;
+    if (!active_window) return;
+
+    auto& buf = active_window->getBuffer();
+    auto& cur = active_window->getCursor();
+    auto& view_port = active_window->getViewPort();
+
+    const auto& text = buf.getText();
+    if (text.empty()) return;
+
+    std::size_t current_line = cur.getLine();
+    
+    if (cur.getCol() > 0) {
+	cur.retreatCol();
+    } else if (current_line > 0) {
+	std::size_t prev_line_size = text[current_line - 1].first;
+	cur.setPosition(current_line - 1, prev_line_size);
+    }
+    scrollToCursor(cur, view_port);
+}
+
+void Editor::moveCursorRight()
+{
+    if (!active_window) return;
+
+    auto& buf = active_window->getBuffer();
+    auto& cur = active_window->getCursor();
+    auto& view_port = active_window->getViewPort();
+
+    const auto& text = buf.getText();
+    if (text.empty()) return;
+
+    std::size_t current_line = cur.getLine();
+    std::size_t line_size = text[current_line].first;
+
+    if (cur.getCol() < line_size) {
+        cur.advanceCol();
+    } else if (current_line + 1 < text.size()) {
+        cur.setPosition(current_line + 1, 0);
+    }
+    scrollToCursor(cur, view_port);
+}
+
+void Editor::moveCursorUp()
+{
+    if (!active_window) return;
+
+    auto& buf = active_window->getBuffer();
+    auto& cur = active_window->getCursor();
+    auto& view_port = active_window->getViewPort();  
+
+    const auto& text = buf.getText();
+    if (text.empty()) return;
+
+    std::size_t current_line = cur.getLine();
+	
+    if (current_line > 0) {
+	std::size_t prev_line_size = text[current_line - 1].first;
+	std::size_t new_col = std::ranges::clamp(cur.getCol(), std::size_t{0}, prev_line_size);
+	cur.setPosition(current_line - 1, new_col);
+    }
+    
+    scrollToCursor(cur, view_port);
+}
+
+void Editor::moveCursorDown()
+{
+    if (!active_window) return;
+
+    auto& buf = active_window->getBuffer();
+    auto& cur = active_window->getCursor();
+    auto& view_port = active_window->getViewPort();
+    
+    const auto& text = buf.getText();
+    if (text.empty()) return;
+
+    std::size_t current_line = cur.getLine();
+	
+    if (current_line + 1 < text.size()) {
+	std::size_t next_line_size = text[current_line + 1].first;
+	std::size_t new_col = std::ranges::clamp(cur.getCol(), std::size_t{0}, next_line_size);
+	cur.setPosition(current_line + 1, new_col);
+    }
+    
+    scrollToCursor(cur, view_port);
+}
+
+void Editor::scrollToCursor(const Cursor& cur, ViewPort& vp)
+{
+    auto cur_line = cur.getLine();
+    auto cur_col = cur.getCol();
+
+    int padding = 3;
+    
+    if (cur_line < vp.first_visible_line)
+	vp.first_visible_line = cur_line;
+
+    if (cur_line >= vp.first_visible_line + vp.visible_lines)
+	vp.first_visible_line = cur_line - vp.visible_lines + padding;
+
+    if (cur_col < vp.first_visible_col)
+	vp.first_visible_col = cur_col;
+
+    if (cur_col >= vp.first_visible_col + vp.visible_cols)
+	vp.first_visible_col = cur_col - vp.visible_cols + padding;
+
+    //    vp.first_visible_line = clamp(vp.first_visible_line, 0, max_scroll_line);
+}
+    
+
+void Editor::insertCharOnActiveWindow(char c)
+{
+    if (!active_window) return;
+
+    auto& buf = active_window->getBuffer();
+    auto& cur = active_window->getCursor();
+    auto& view_port = active_window->getViewPort();
+
+    buf.insertCharAtCursor(cur.getLine(), cur.getCol(), c);
+    cur.advanceCol();
+    scrollToCursor(cur, view_port);
 }
 
 void Editor::refreshScreen()
 {
     if (active_window) {
-	active_window->draw(font);
+	active_window->draw(font, FONT_SCALE);
     }
 }
 
-void Editor::saveToFile(const std::string& file_path)
-{
-    std::ofstream ofs{file_path, std::ios_base::binary};
-    if (!ofs) {
-        throw std::runtime_error("Failed to open file: " + file_path);
-    }
+// void Editor::saveToFile(const std::string& file_path)
+// {
+//     std::ofstream ofs{file_path, std::ios_base::binary};
+//     if (!ofs) {
+//         throw std::runtime_error("Failed to open file: " + file_path);
+//     }
     
-    for (std::size_t i = 0; i < buffer.size(); ++i) {
-	const auto& [size, line] = buffer[i];
-	ofs.write(line.data(), size);
-	ofs.put('\n');
-    }
-    std::print(stdout, "[INFO] Successfully save buffer content to file: {}\n", file_path);
-}
+//     for (std::size_t i = 0; i < buffer.size(); ++i) {
+// 	const auto& [size, line] = buffer[i];
+// 	ofs.write(line.data(), size);
+// 	ofs.put('\n');
+//     }
+//     std::print(stdout, "[INFO] Successfully save buffer content to file: {}\n", file_path);
+// }
 
-void Editor::loadFromFile(const std::string& file_path)
-{
-    assert(buffer.size() == 0 && "Buffer should be empty.");
-    std::ifstream ifs{file_path, std::ios_base::binary | std::ios_base::ate};
-    if (!ifs) throw std::runtime_error("Failed to open file: " + file_path);
+// void Editor::loadFromFile(const std::string& file_path)
+// {
+//     assert(buffer.size() == 0 && "Buffer should be empty.");
+//     std::ifstream ifs{file_path, std::ios_base::binary | std::ios_base::ate};
+//     if (!ifs) throw std::runtime_error("Failed to open file: " + file_path);
 
-    std::string content(ifs.tellg(), '\0');
-    ifs.seekg(0, std::ios::beg);
-    ifs.read(content.data(), content.size());
+//     std::string content(ifs.tellg(), '\0');
+//     ifs.seekg(0, std::ios::beg);
+//     ifs.read(content.data(), content.size());
 
-    buffer = content 
-           | std::views::split('\n')
-           | std::views::transform([](auto&& range) {
-                 std::string_view sv{range.begin(), range.end()};
-                 return TextLine{ sv.size(), std::string(sv) };
-             })
-           | std::ranges::to<Buffer>();
-}
+//     buffer = content 
+//            | std::views::split('\n')
+//            | std::views::transform([](auto&& range) {
+//                  std::string_view sv{range.begin(), range.end()};
+//                  return TextLine{ sv.size(), std::string(sv) };
+//              })
+//            | std::ranges::to<Buffer>();
+// }
 
 Font Editor::loadPNGDataAsFont(std::span<const unsigned char> data, int cols, int rows)
 {
@@ -263,6 +295,11 @@ Font Editor::loadPNGDataAsFont(std::span<const unsigned char> data, int cols, in
     return font;
 }
 
+inline std::shared_ptr<Window> Editor::getActiveWindow()
+{
+    return active_window;
+}
+
 void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) 
 {
     (void)window;
@@ -295,10 +332,9 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
 void charCallback(GLFWwindow* window, unsigned int codepoint)
 {
     (void)window;
-    Editor& editor = Editor::getInstance();
-    Cursor& cursor = editor.getCursor();
-    editor.insertTextOnCursor(std::string{(char)codepoint}, 1, cursor.col_idx, cursor.line_idx);
-    cursor.col_idx += 1;
+    if (codepoint >= 32 && codepoint <= 126) {
+        Editor::getInstance().insertCharOnActiveWindow(static_cast<char>(codepoint));
+    }
 }
 
 int main(int argc, char *argv[])
@@ -319,7 +355,6 @@ int main(int argc, char *argv[])
     while (!WindowShouldClose()) {
 	BeginDrawing();
 	ClearBackground(Color{ 0x18, 0x18, 0x18, 0x0 });
-	//renderer.renderScene(editor.getBuffer(), editor.getCursor(), Vec2f{ 0.0f, 0.0f });
 	editor.refreshScreen();
         EndDrawing();
     }

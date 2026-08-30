@@ -2,21 +2,15 @@
 
 #include <print>
 #include <cstdio>
-#include <cstddef>
-#include <cassert>
-#include <vector>
 #include <fstream>
-#include <ios>
+#include <iostream>
 #include <string_view>
 #include <ranges>
 #include <algorithm>
 
-#include "raylib.h"
 #define GRAPHICS_API_OPENGL_33
 #include "GLFW/glfw3.h"
-#include "rlgl.h"
 
-#include "./la.h"
 #include "graphic.h"
 
 extern "C" {
@@ -53,21 +47,22 @@ public:
     }
     void init();
     
-    void insertTextOnCursor(const std::string& text, std::size_t text_size, int col_idx, int line_idx);
-    void backspaceOnCursor();
-    void newlineOnCursor();
+
     void handleKeyAction(KeyInputTag key);
+    void createNewWindow(int window_width, int window_height);
+    void insertCharOnActiveWindow(char c);
     void moveCursorLeft();
     void moveCursorRight();
     void moveCursorUp();
     void moveCursorDown();
-
-    void createNewWindow(int window_width, int window_height);
-    std::shared_ptr<Window> getActiveWindow();
+    void scrollToCursor(const Cursor& cur, ViewPort& vp);
+    
     void refreshScreen();
-    void saveToFile(const std::string& file_path);
-    void loadFromFile(const std::string& file_path);
+    // void saveToFile(const std::string& file_path);
+    // void loadFromFile(const std::string& file_path);
     Font loadPNGDataAsFont(std::span<const unsigned char> data, int cols, int rows);
+    
+    std::shared_ptr<Window> getActiveWindow();
     
     Editor(const Editor&) = delete;
     Editor& operator=(const Editor&) = delete;
@@ -82,14 +77,15 @@ private:
     static const int FONT_HEIGHT = 64;
     static const int FONT_COLS = 18;
     static const int FONT_ROWS = 7;
+    static constexpr float FONT_SCALE = 2.0f;
     static const int FONT_CHAR_WIDTH = (FONT_WIDTH / FONT_COLS);
     static const int FONT_CHAR_HEIGHT = (FONT_HEIGHT / FONT_ROWS);
-    static constexpr float FONT_SCALE = 2.0f;
     static constexpr Color FONT_COLOR = WHITE;
     static const size_t BUFFER_CAP = 1024;
     
     std::vector<std::shared_ptr<Window>> open_windows;
     std::shared_ptr<Window> active_window;
     //Observer observer;
+    std::size_t max_scroll_line;
     Font font;
 };
