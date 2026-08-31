@@ -55,6 +55,8 @@ public:
     void moveCursorRight();
     void moveCursorUp();
     void moveCursorDown();
+
+    void backspaceOnCursor();
     void scrollToCursor(const Cursor& cur, ViewPort& vp);
     
     void refreshScreen();

@@ -14,7 +14,12 @@ public:
     {}
 
     void insertLine(std::string line);
-    void insertCharAtCursor(std::size_t line, std::size_t col, char c);
+    void removeLine(std::size_t cursor_line);
+    void insertCharAt(std::size_t cursor_line, std::size_t cursor_col, char c);
+    void eraseCharAt(std::size_t cursor_line, std::size_t cursor_col);
+    void appendLineTo(std::size_t target_line, std::size_t source_line);
+
+    
     Text& getText() { return text; }
 
 private:

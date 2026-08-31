@@ -22,9 +22,9 @@ void Editor::handleKeyAction(KeyInputTag key)
 {
     static_assert(KeyInputTag::__static_key_input_tag_count == 7);
     switch (key) {
-    // case KeyInputTag::KIT_BACKSPACE:
-    // 	backspaceOnCursor();
-    // 	break;
+    case KeyInputTag::KIT_BACKSPACE:
+	backspaceOnCursor();
+	break;
     // case KeyInputTag::KIT_ENTER:
     // 	newlineOnCursor();
     // 	break;
@@ -169,6 +169,34 @@ void Editor::moveCursorDown()
     scrollToCursor(cur, view_port);
 }
 
+void Editor::backspaceOnCursor()
+{
+    if (!active_window) return;
+
+    auto& buf = active_window->getBuffer();
+    auto& cur = active_window->getCursor();
+    auto& view_port = active_window->getViewPort();
+    
+    const auto& text = buf.getText();
+    if (text.empty()) return;
+
+    std::size_t current_line = cur.getLine();
+
+    if (cur.getCol() > 0) {
+	buf.eraseCharAt(cur.getLine(), cur.getCol() - 1);
+	cur.retreatCol();
+    } else if (current_line > 0) {
+	std::size_t prev_line = current_line - 1;
+        std::size_t prev_line_size = text[prev_line].first;
+	
+	buf.appendLineTo(prev_line, current_line);
+	buf.removeLine(current_line);
+	cur.setPosition(prev_line, prev_line_size);
+    }
+
+    scrollToCursor(cur, view_port);    
+}
+
 void Editor::scrollToCursor(const Cursor& cur, ViewPort& vp)
 {
     auto cur_line = cur.getLine();
@@ -200,7 +228,7 @@ void Editor::insertCharOnActiveWindow(char c)
     auto& cur = active_window->getCursor();
     auto& view_port = active_window->getViewPort();
 
-    buf.insertCharAtCursor(cur.getLine(), cur.getCol(), c);
+    buf.insertCharAt(cur.getLine(), cur.getCol(), c);
     cur.advanceCol();
     scrollToCursor(cur, view_port);
 }
