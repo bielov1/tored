@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <fstream>
 #include <iostream>
+
 #include <string_view>
 #include <ranges>
 #include <algorithm>
@@ -60,6 +61,7 @@ public:
     void backspaceOnCursor();
     void newlineOnCursor();
     void scrollToCursor(const Cursor& cur, ViewPort& vp);
+    void saveToFile(const std::string& file_path);
     
     void refreshScreen();
     void closeActiveWindow();

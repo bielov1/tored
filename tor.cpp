@@ -44,9 +44,10 @@ void Editor::handleKeyAction(KeyInputTag key)
     case KeyInputTag::KIT_F2:
 	horizontalSplitScreen();
 	break;
-    // case KeyInputTag::KIT_F5:
-    // 	saveToFile(std::string{"output"});
-    // 	break;
+    case GLFW_KEY_F5:
+	std::fprintf(stdout, "F5 was pressed\n");
+	saveToFile(std::string{"output"});
+	break;
     default:
 	std::fprintf(stderr, "[WARNING] uknown key input\n");
     }
@@ -399,6 +400,19 @@ Font Editor::loadPNGDataAsFont(std::span<const unsigned char> data, int cols, in
     
     UnloadImage(image);
     return font;
+
+void Editor::saveToFile(const std::string& file_path)
+{
+    std::FILE *f = std::fopen(file_path.c_str(), "w+");
+    
+    for (std::size_t i = 0; i < buffer.size(); ++i) {
+	auto& [size, line] = buffer[i];
+	std::fwrite(line.c_str(), 1, size, f);
+	std::fputc('\n', f);
+    }
+    std::fclose(f);
+
+    std::print(stdout, "[INFO] Successfully save buffer contet to file: {}\n", file_path);
 }
 
 void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) 
@@ -428,9 +442,12 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
     if (key == GLFW_KEY_F2 && action == GLFW_PRESS) {
         Editor::getInstance().handleKeyAction(KeyInputTag::KIT_F2);
     }
+    // if (key == GLFW_KEY_F5 && action == GLFW_PRESS) {
+    //     Editor::getInstance().handleKeyAction(KeyInputTag::KIT_F5);
+    // }
     if (key == GLFW_KEY_F5 && action == GLFW_PRESS) {
-        Editor::getInstance().handleKeyAction(KeyInputTag::KIT_F5);
-    }
+        Editor::getInstance().handleKeyAction(GLFW_KEY_F5);
+    }    
 }
 
 void charCallback(GLFWwindow* window, unsigned int codepoint)
