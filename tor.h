@@ -61,12 +61,11 @@ public:
     void backspaceOnCursor();
     void newlineOnCursor();
     void scrollToCursor(const Cursor& cur, ViewPort& vp);
-    void saveToFile(const std::string& file_path);
     
     void refreshScreen();
     void closeActiveWindow();
     void horizontalSplitScreen();
-    // void saveToFile(const std::string& file_path);
+    void saveToFile(const std::string& file_path);
     // void loadFromFile(const std::string& file_path);
     Font loadPNGDataAsFont(std::span<const unsigned char> data, int cols, int rows);
     

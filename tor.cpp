@@ -44,10 +44,10 @@ void Editor::handleKeyAction(KeyInputTag key)
     case KeyInputTag::KIT_F2:
 	horizontalSplitScreen();
 	break;
-    case GLFW_KEY_F5:
-	std::fprintf(stdout, "F5 was pressed\n");
-	saveToFile(std::string{"output"});
-	break;
+    // case GLFW_KEY_F5:
+    // 	std::fprintf(stdout, "F5 was pressed\n");
+    // 	saveToFile(std::string{"output"});
+    // 	break;
     default:
 	std::fprintf(stderr, "[WARNING] uknown key input\n");
     }
@@ -270,8 +270,7 @@ void Editor::scrollToCursor(const Cursor& cur, ViewPort& vp)
 
     vp.first_visible_line = std::ranges::clamp(vp.first_visible_line, std::size_t{0}, max_scroll_line);
     vp.first_visible_col = std::ranges::clamp(vp.first_visible_col, std::size_t{0}, max_scroll_col);
-}
-    
+}    
 
 void Editor::insertCharOnActiveWindow(char c)
 {
@@ -317,22 +316,16 @@ void Editor::horizontalSplitScreen()
     new_window_rect.width /= 2.f;
     new_window_rect.x = active_window_rect.x + active_window_rect.width;
     new_window_view_port.visible_cols = static_cast<std::size_t>(new_window_rect.width / (FONT_CHAR_WIDTH * FONT_SCALE));
+    
+    scrollToCursor(active_window->getCursor(), active_window_view_port);
+    scrollToCursor(new_window->getCursor(), new_window_view_port);
 }
 
-// void Editor::saveToFile(const std::string& file_path)
-// {
-//     std::ofstream ofs{file_path, std::ios_base::binary};
-//     if (!ofs) {
-//         throw std::runtime_error("Failed to open file: " + file_path);
-//     }
-    
-//     for (std::size_t i = 0; i < buffer.size(); ++i) {
-// 	const auto& [size, line] = buffer[i];
-// 	ofs.write(line.data(), size);
-// 	ofs.put('\n');
-//     }
-//     std::print(stdout, "[INFO] Successfully save buffer content to file: {}\n", file_path);
-// }
+void Editor::saveToFile(const std::string& file_path)
+{
+    (void)file_path;
+    assert(false && "saveToFile() is not implemented yet\n");
+}
 
 // void Editor::loadFromFile(const std::string& file_path)
 // {
@@ -400,19 +393,6 @@ Font Editor::loadPNGDataAsFont(std::span<const unsigned char> data, int cols, in
     
     UnloadImage(image);
     return font;
-
-void Editor::saveToFile(const std::string& file_path)
-{
-    std::FILE *f = std::fopen(file_path.c_str(), "w+");
-    
-    for (std::size_t i = 0; i < buffer.size(); ++i) {
-	auto& [size, line] = buffer[i];
-	std::fwrite(line.c_str(), 1, size, f);
-	std::fputc('\n', f);
-    }
-    std::fclose(f);
-
-    std::print(stdout, "[INFO] Successfully save buffer contet to file: {}\n", file_path);
 }
 
 void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) 
@@ -442,12 +422,9 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
     if (key == GLFW_KEY_F2 && action == GLFW_PRESS) {
         Editor::getInstance().handleKeyAction(KeyInputTag::KIT_F2);
     }
-    // if (key == GLFW_KEY_F5 && action == GLFW_PRESS) {
-    //     Editor::getInstance().handleKeyAction(KeyInputTag::KIT_F5);
-    // }
     if (key == GLFW_KEY_F5 && action == GLFW_PRESS) {
-        Editor::getInstance().handleKeyAction(GLFW_KEY_F5);
-    }    
+        Editor::getInstance().handleKeyAction(KeyInputTag::KIT_F5);
+    }
 }
 
 void charCallback(GLFWwindow* window, unsigned int codepoint)
