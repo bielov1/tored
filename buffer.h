@@ -1,10 +1,11 @@
 #pragma once
 
-#include <vector>
+#include <print>
+#include <deque>
 #include <string>
 
 using Line = std::pair<std::size_t, std::string>;
-using Text = std::vector<Line>;
+using Text = std::deque<Line>;
 
 class Buffer
 {
@@ -18,6 +19,7 @@ public:
     void insertCharAt(std::size_t cursor_line, std::size_t cursor_col, char c);
     void eraseCharAt(std::size_t cursor_line, std::size_t cursor_col);
     void appendLineTo(std::size_t target_line, std::size_t source_line);
+    void splitLineAt(std::size_t cursor_line, std::size_t cursor_col);
 
     
     Text& getText() { return text; }

@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <cassert>
+#include <vector>
 
 #include "raylib.h"
 #include "buffer.h"
@@ -30,31 +31,37 @@ public:
 class BufferView : public Graphic
 {
 public:
-    BufferView(ViewPort *vp,
-	       Buffer *b,
-	       Cursor *c)
-        : view_port(vp)
-	, buffer(b)
-	, cursor(c)
+    BufferView(Rectangle *r,
+	       ViewPort *vp,
+	       Cursor *c,
+	       Buffer *b)
+        : window_rect( r )
+	, view_port( vp )
+	, cursor( c )
+	, buffer( b )
     {}
     
     void drawChar(Font font, char c, Vec2f pos, int scale, Color color);    
     void draw(Font font, int scale) override;
-private:    
+
+private:
+    Rectangle *window_rect;
     ViewPort *view_port;
-    Buffer *buffer;
     Cursor *cursor;
+    Buffer *buffer;
 };
 
 class Window : public Graphic
 {
 public:
-    Window(std::unique_ptr<ViewPort> vp,
-	   std::unique_ptr<Buffer> b,
-	   std::unique_ptr<Cursor> c)
-        : view_port(std::move(vp))
-	, buffer(std::move(b))
-        , cursor(std::move(c))
+    Window(Rectangle r,
+	   ViewPort vp,
+	   Cursor c,
+	   std::shared_ptr<Buffer> b)
+        : rect{ r }
+	, view_port{ vp }
+        , cursor{ c }
+	, buffer{ std::move(b) }
     {}
     
     ~Window() override = default;
@@ -69,13 +76,18 @@ public:
     }
     //remove(std::shared_ptr<Graphic> component) override {}
 
-    ViewPort& getViewPort() const { return *view_port; }
+    Rectangle& getRect()    { return rect; }
+    ViewPort& getViewPort() { return view_port; }
+    Cursor& getCursor()     { return cursor; }
+    
     Buffer& getBuffer() const { return *buffer; }
-    Cursor& getCursor() const { return *cursor; }    
+    std::shared_ptr<Buffer> getBufferShared() const { return buffer; }
+
  private:
     std::vector<std::shared_ptr<Graphic>> graphics;
 
-    std::unique_ptr<ViewPort> view_port;
-    std::unique_ptr<Buffer> buffer;
-    std::unique_ptr<Cursor> cursor;
+    Rectangle rect;
+    ViewPort view_port;
+    Cursor cursor;
+    std::shared_ptr<Buffer> buffer;
 };

@@ -29,6 +29,7 @@ enum class KeyInputTag : int
     KIT_RIGHT,
     KIT_UP,
     KIT_DOWN,
+    KIT_F2, // split_screen: show same buffer on two separate windows
     KIT_F5,
     __static_key_input_tag_count
 };
@@ -44,12 +45,12 @@ public:
     {
 	static Editor editor;
 	return editor;
-    }
-    void init();
-    
+    }    
 
     void handleKeyAction(KeyInputTag key);
-    void createNewWindow(int window_width, int window_height);
+    std::shared_ptr<Window> createNewWindow(int window_width, int window_height);
+    std::shared_ptr<Window> createNewWindow(std::shared_ptr<Window> other_window);
+    void addGraphicsToWindow(std::shared_ptr<Window> window);
     void insertCharOnActiveWindow(char c);
     void moveCursorLeft();
     void moveCursorRight();
@@ -57,14 +58,18 @@ public:
     void moveCursorDown();
 
     void backspaceOnCursor();
+    void newlineOnCursor();
     void scrollToCursor(const Cursor& cur, ViewPort& vp);
     
     void refreshScreen();
+    void closeActiveWindow();
+    void horizontalSplitScreen();
     // void saveToFile(const std::string& file_path);
     // void loadFromFile(const std::string& file_path);
     Font loadPNGDataAsFont(std::span<const unsigned char> data, int cols, int rows);
     
-    std::shared_ptr<Window> getActiveWindow();
+    std::shared_ptr<Window> getActiveWindow() { return active_window; }
+    void setActiveWindow(std::shared_ptr<Window> new_active_window) { active_window = new_active_window; }
     
     Editor(const Editor&) = delete;
     Editor& operator=(const Editor&) = delete;
@@ -87,7 +92,7 @@ private:
     
     std::vector<std::shared_ptr<Window>> open_windows;
     std::shared_ptr<Window> active_window;
-    //Observer observer;
     std::size_t max_scroll_line;
+    std::size_t max_scroll_col;
     Font font;
 };

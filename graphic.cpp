@@ -30,8 +30,8 @@ void BufferView::draw(Font font, int scale)
     std::size_t text_size = text.size();    
     float char_w = font.recs[0].width * scale;
     float char_h = font.recs[0].height * scale;
-    
-    Vec2f start_pos = { 0.0f, 0.0f };
+
+    Vec2f start_pos = { window_rect->x, window_rect->y };
     Vec2f draw_char_pos = start_pos;
     
     // render text on screen

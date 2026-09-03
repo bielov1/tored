@@ -2,15 +2,16 @@
 #include "tor.h"
 
 Editor::Editor()
-    : max_scroll_line{0}
+    : max_scroll_line{1024}
+    , max_scroll_col{256}
     , font{}
 {
     size_t font_size = _binary_charmap_oldschool_white_png_end - _binary_charmap_oldschool_white_png_start;
     unsigned char *font_data = (unsigned char *)_binary_charmap_oldschool_white_png_start;
     std::span<const unsigned char> data_view{font_data, font_size};
     font = loadPNGDataAsFont(data_view, FONT_COLS, FONT_ROWS);
-
-    createNewWindow(SCREEN_WIDTH, SCREEN_HEIGHT);
+    
+    setActiveWindow(createNewWindow(SCREEN_WIDTH, SCREEN_HEIGHT));
 }
 
 Editor::~Editor()
@@ -20,14 +21,14 @@ Editor::~Editor()
 
 void Editor::handleKeyAction(KeyInputTag key)
 {
-    static_assert(KeyInputTag::__static_key_input_tag_count == 7);
+    static_assert(KeyInputTag::__static_key_input_tag_count == 8);
     switch (key) {
     case KeyInputTag::KIT_BACKSPACE:
 	backspaceOnCursor();
 	break;
-    // case KeyInputTag::KIT_ENTER:
-    // 	newlineOnCursor();
-    // 	break;
+    case KeyInputTag::KIT_ENTER:
+	newlineOnCursor();
+	break;
     case KeyInputTag::KIT_LEFT:
 	moveCursorLeft();
 	break;
@@ -40,6 +41,9 @@ void Editor::handleKeyAction(KeyInputTag key)
     case KeyInputTag::KIT_DOWN:
 	moveCursorDown();
 	break;
+    case KeyInputTag::KIT_F2:
+	horizontalSplitScreen();
+	break;
     // case KeyInputTag::KIT_F5:
     // 	saveToFile(std::string{"output"});
     // 	break;
@@ -48,37 +52,70 @@ void Editor::handleKeyAction(KeyInputTag key)
     }
 }
 
-void Editor::createNewWindow(int window_width, int window_height)
+// IDEA: editor should have main window from which
+// peer windows constantly retrives position of main window cursor
+// to open the exact file name the cursor hovers. Just like threads.
+// should all peer windows do that?
+
+std::shared_ptr<Window> Editor::createNewWindow(int window_width, int window_height)
 {
-    auto new_view_port = std::make_unique<ViewPort>(ViewPort{
-	    .first_visible_line = 0,
-	    .first_visible_col  = 0,
-	    .visible_lines = static_cast<std::size_t>(window_height / (FONT_CHAR_HEIGHT * FONT_SCALE)),
-	    .visible_cols  = static_cast<std::size_t>(window_width / (FONT_CHAR_WIDTH * FONT_SCALE))
-	});    
-    auto new_buffer = std::make_unique<Buffer>();
-    for (int i = 0; i < 100; ++i) {
-	new_buffer->insertLine(std::to_string(i));
-	new_buffer->insertLine("Hello World!");
-    }
-    auto new_cursor = std::make_unique<Cursor>();
+    Rectangle new_rect = {
+	.x = 0.0f,
+	.y = 0.0f,
+	.width = static_cast<float>(window_width),
+	.height = static_cast<float>(window_height)
+    };
+    
+    ViewPort new_view_port = {
+	.first_visible_line = 0,
+	.first_visible_col  = 0,
+	.visible_lines = static_cast<std::size_t>(window_height / (FONT_CHAR_HEIGHT * FONT_SCALE)),
+	.visible_cols  = static_cast<std::size_t>(window_width / (FONT_CHAR_WIDTH * FONT_SCALE))
+    };
+    
+    Cursor new_cursor{};
+    auto new_buffer = std::make_shared<Buffer>();
     
     auto new_window = std::make_shared<Window>(
-	     std::move(new_view_port),
-	     std::move(new_buffer),
-	     std::move(new_cursor)
-	);
-
-    auto buffer_view = std::make_shared<BufferView>(
-	&new_window->getViewPort(),
-	&new_window->getBuffer(),
-	&new_window->getCursor()
+        new_rect,
+        new_view_port,
+        new_cursor,
+	std::move(new_buffer)
     );
     
-    new_window->add(buffer_view);
+    addGraphicsToWindow(new_window);
     
     open_windows.push_back(new_window);
-    active_window = new_window;
+    return new_window;
+}
+
+std::shared_ptr<Window> Editor::createNewWindow(std::shared_ptr<Window> other_window)
+{
+    if (!other_window) return nullptr;
+
+    auto new_window = std::make_shared<Window>(
+        other_window->getRect(),
+        other_window->getViewPort(),
+        other_window->getCursor(),
+	other_window->getBufferShared()
+    );
+    
+    addGraphicsToWindow(new_window);
+    
+    open_windows.push_back(new_window);
+    return new_window; 
+}
+
+void Editor::addGraphicsToWindow(std::shared_ptr<Window> window)
+{
+    auto buffer_view = std::make_shared<BufferView>(
+	&window->getRect(),
+	&window->getViewPort(),
+	&window->getCursor(),
+	&window->getBuffer()
+    );
+    
+    window->add(buffer_view);
 }
 
 void Editor::moveCursorLeft()
@@ -181,9 +218,10 @@ void Editor::backspaceOnCursor()
     if (text.empty()) return;
 
     std::size_t current_line = cur.getLine();
+    std::size_t current_col = cur.getCol();
 
     if (cur.getCol() > 0) {
-	buf.eraseCharAt(cur.getLine(), cur.getCol() - 1);
+	buf.eraseCharAt(current_line, current_col - 1);
 	cur.retreatCol();
     } else if (current_line > 0) {
 	std::size_t prev_line = current_line - 1;
@@ -195,6 +233,19 @@ void Editor::backspaceOnCursor()
     }
 
     scrollToCursor(cur, view_port);    
+}
+
+void Editor::newlineOnCursor()
+{
+    if (!active_window) return;
+
+    auto& buf = active_window->getBuffer();
+    auto& cur = active_window->getCursor();
+    auto& view_port = active_window->getViewPort();
+
+    buf.splitLineAt(cur.getLine(), cur.getCol());
+    cur.setPosition(cur.getLine() + 1, 0);
+    scrollToCursor(cur, view_port);
 }
 
 void Editor::scrollToCursor(const Cursor& cur, ViewPort& vp)
@@ -216,7 +267,8 @@ void Editor::scrollToCursor(const Cursor& cur, ViewPort& vp)
     if (cur_col >= vp.first_visible_col + vp.visible_cols)
 	vp.first_visible_col = cur_col - vp.visible_cols + padding;
 
-    //    vp.first_visible_line = clamp(vp.first_visible_line, 0, max_scroll_line);
+    vp.first_visible_line = std::ranges::clamp(vp.first_visible_line, std::size_t{0}, max_scroll_line);
+    vp.first_visible_col = std::ranges::clamp(vp.first_visible_col, std::size_t{0}, max_scroll_col);
 }
     
 
@@ -235,9 +287,35 @@ void Editor::insertCharOnActiveWindow(char c)
 
 void Editor::refreshScreen()
 {
-    if (active_window) {
-	active_window->draw(font, FONT_SCALE);
+    for (const auto& window : open_windows) {
+	if (window) {
+	    window->draw(font, FONT_SCALE);
+	}
     }
+}
+
+void Editor::closeActiveWindow()
+{
+    assert(false && "closeActiveWindow() is not implemented yet\n");
+}
+
+void Editor::horizontalSplitScreen()
+{
+    if (!active_window) return;
+    
+    std::shared_ptr<Window> new_window = createNewWindow(active_window);
+    
+    auto& active_window_rect = active_window->getRect();
+    auto& active_window_view_port = active_window->getViewPort();
+    auto& new_window_rect = new_window->getRect();
+    auto& new_window_view_port = new_window->getViewPort();
+
+    active_window_rect.width /= 2.f;
+    active_window_view_port.visible_cols = static_cast<std::size_t>(active_window_rect.width / (FONT_CHAR_WIDTH * FONT_SCALE));
+
+    new_window_rect.width /= 2.f;
+    new_window_rect.x = active_window_rect.x + active_window_rect.width;
+    new_window_view_port.visible_cols = static_cast<std::size_t>(new_window_rect.width / (FONT_CHAR_WIDTH * FONT_SCALE));
 }
 
 // void Editor::saveToFile(const std::string& file_path)
@@ -323,17 +401,12 @@ Font Editor::loadPNGDataAsFont(std::span<const unsigned char> data, int cols, in
     return font;
 }
 
-inline std::shared_ptr<Window> Editor::getActiveWindow()
-{
-    return active_window;
-}
-
 void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) 
 {
     (void)window;
     (void)scancode;
     (void)mods;
-    static_assert(KeyInputTag::__static_key_input_tag_count == 7);
+    static_assert(KeyInputTag::__static_key_input_tag_count == 8);
     if (key == GLFW_KEY_BACKSPACE && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
 	Editor::getInstance().handleKeyAction(KeyInputTag::KIT_BACKSPACE);
     }
@@ -352,9 +425,12 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
     if (key == GLFW_KEY_DOWN && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
         Editor::getInstance().handleKeyAction(KeyInputTag::KIT_DOWN);
     }
+    if (key == GLFW_KEY_F2 && action == GLFW_PRESS) {
+        Editor::getInstance().handleKeyAction(KeyInputTag::KIT_F2);
+    }
     if (key == GLFW_KEY_F5 && action == GLFW_PRESS) {
         Editor::getInstance().handleKeyAction(KeyInputTag::KIT_F5);
-    }    
+    }
 }
 
 void charCallback(GLFWwindow* window, unsigned int codepoint)
