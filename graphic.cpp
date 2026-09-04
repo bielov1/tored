@@ -79,3 +79,10 @@ void BufferView::draw(Font font, int scale)
 	}
     }
 }
+
+
+void Window::recalcViewPort(int char_width, int char_height)
+{
+    view_port.visible_cols = static_cast<std::size_t>(rect.width / char_width);
+    view_port.visible_lines = static_cast<std::size_t>(rect.height / char_height);
+}

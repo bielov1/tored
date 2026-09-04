@@ -10,7 +10,6 @@ Editor::Editor()
     unsigned char *font_data = (unsigned char *)_binary_charmap_oldschool_white_png_start;
     std::span<const unsigned char> data_view{font_data, font_size};
     font = loadPNGDataAsFont(data_view, FONT_COLS, FONT_ROWS);
-    
     setActiveWindow(createNewWindow(SCREEN_WIDTH, SCREEN_HEIGHT));
 }
 
@@ -121,11 +120,9 @@ void Editor::addGraphicsToWindow(std::shared_ptr<Window> window)
 
 void Editor::moveCursorLeft()
 {
-    if (!active_window) return;
-
+    if (!active_window) assert(false && "moveCursorLeft() always assumes active_window is valid\n");
     auto& buf = active_window->getBuffer();
     auto& cur = active_window->getCursor();
-    auto& view_port = active_window->getViewPort();
 
     const auto& text = buf.getText();
     if (text.empty()) return;
@@ -138,16 +135,14 @@ void Editor::moveCursorLeft()
 	std::size_t prev_line_size = text[current_line - 1].first;
 	cur.setPosition(current_line - 1, prev_line_size);
     }
-    scrollToCursor(cur, view_port);
+    scrollToCursor(cur, active_window->getViewPort());
 }
 
 void Editor::moveCursorRight()
 {
-    if (!active_window) return;
-
+    if (!active_window) assert(false && "moveCursorRight() always assumes active_window is valid\n");
     auto& buf = active_window->getBuffer();
     auto& cur = active_window->getCursor();
-    auto& view_port = active_window->getViewPort();
 
     const auto& text = buf.getText();
     if (text.empty()) return;
@@ -160,16 +155,14 @@ void Editor::moveCursorRight()
     } else if (current_line + 1 < text.size()) {
         cur.setPosition(current_line + 1, 0);
     }
-    scrollToCursor(cur, view_port);
+    scrollToCursor(cur, active_window->getViewPort());
 }
 
 void Editor::moveCursorUp()
 {
-    if (!active_window) return;
-
+    if (!active_window) assert(false && "moveCursorUp() always assumes active_window is valid\n");
     auto& buf = active_window->getBuffer();
     auto& cur = active_window->getCursor();
-    auto& view_port = active_window->getViewPort();  
 
     const auto& text = buf.getText();
     if (text.empty()) return;
@@ -181,17 +174,14 @@ void Editor::moveCursorUp()
 	std::size_t new_col = std::ranges::clamp(cur.getCol(), std::size_t{0}, prev_line_size);
 	cur.setPosition(current_line - 1, new_col);
     }
-    
-    scrollToCursor(cur, view_port);
+    scrollToCursor(cur, active_window->getViewPort());
 }
 
 void Editor::moveCursorDown()
 {
-    if (!active_window) return;
-
+    if (!active_window) assert(false && "moveCursorDown() always assumes active_window is valid\n");
     auto& buf = active_window->getBuffer();
     auto& cur = active_window->getCursor();
-    auto& view_port = active_window->getViewPort();
     
     const auto& text = buf.getText();
     if (text.empty()) return;
@@ -203,17 +193,14 @@ void Editor::moveCursorDown()
 	std::size_t new_col = std::ranges::clamp(cur.getCol(), std::size_t{0}, next_line_size);
 	cur.setPosition(current_line + 1, new_col);
     }
-    
-    scrollToCursor(cur, view_port);
+    scrollToCursor(cur, active_window->getViewPort());
 }
 
 void Editor::backspaceOnCursor()
 {
-    if (!active_window) return;
-
+    if (!active_window) assert(false && "backspaceOnCursor() always assumes active_window is valid\n");
     auto& buf = active_window->getBuffer();
     auto& cur = active_window->getCursor();
-    auto& view_port = active_window->getViewPort();
     
     const auto& text = buf.getText();
     if (text.empty()) return;
@@ -232,49 +219,44 @@ void Editor::backspaceOnCursor()
 	buf.removeLine(current_line);
 	cur.setPosition(prev_line, prev_line_size);
     }
-
-    scrollToCursor(cur, view_port);    
+    scrollToCursor(cur, active_window->getViewPort());    
 }
 
 void Editor::newlineOnCursor()
 {
-    if (!active_window) return;
-
+    if (!active_window) assert(false && "newlineOnCursor() always assumes active_window is valid\n");
     auto& buf = active_window->getBuffer();
     auto& cur = active_window->getCursor();
-    auto& view_port = active_window->getViewPort();
 
     buf.splitLineAt(cur.getLine(), cur.getCol());
     cur.setPosition(cur.getLine() + 1, 0);
-    scrollToCursor(cur, view_port);
+
+    scrollToCursor(cur, active_window->getViewPort());
 }
 
 void Editor::scrollToCursor(const Cursor& cur, ViewPort& vp)
 {
-    auto cur_line = cur.getLine();
-    auto cur_col = cur.getCol();
+    std::size_t cur_line = cur.getLine();
+    std::size_t cur_col = cur.getCol();
 
-    int padding = 3;
+    std::size_t padding = 5;
     
     if (cur_line < vp.first_visible_line)
-	vp.first_visible_line = cur_line;
+	vp.first_visible_line = cur_line < padding ? 0 : cur_line - padding;
 
     if (cur_line >= vp.first_visible_line + vp.visible_lines)
 	vp.first_visible_line = cur_line - vp.visible_lines + padding;
 
     if (cur_col < vp.first_visible_col)
-	vp.first_visible_col = cur_col;
+	vp.first_visible_col = cur_col < padding ? 0 : cur_col - padding;
 
     if (cur_col >= vp.first_visible_col + vp.visible_cols)
 	vp.first_visible_col = cur_col - vp.visible_cols + padding;
-
-    vp.first_visible_line = std::ranges::clamp(vp.first_visible_line, std::size_t{0}, max_scroll_line);
-    vp.first_visible_col = std::ranges::clamp(vp.first_visible_col, std::size_t{0}, max_scroll_col);
 }    
 
 void Editor::insertCharOnActiveWindow(char c)
 {
-    if (!active_window) return;
+    if (!active_window) assert(false && "insertCharOnActiveWindow() always assumes active_window is valid\n");
 
     auto& buf = active_window->getBuffer();
     auto& cur = active_window->getCursor();
@@ -283,6 +265,20 @@ void Editor::insertCharOnActiveWindow(char c)
     buf.insertCharAt(cur.getLine(), cur.getCol(), c);
     cur.advanceCol();
     scrollToCursor(cur, view_port);
+}
+
+void Editor::onResize(int new_window_width, int new_window_height)
+{
+    // split screen adjustment is not implemented!
+    if (!active_window) assert(false && "onResize() always assumes active_window is valid\n");
+    int char_width = FONT_CHAR_WIDTH * FONT_SCALE;
+    int char_height = FONT_CHAR_HEIGHT * FONT_SCALE;
+
+    // only for single active_window
+    active_window->getRect().width = new_window_width;
+    active_window->getRect().height = new_window_height;
+    active_window->recalcViewPort(char_width, char_height);
+    scrollToCursor(active_window->getCursor(), active_window->getViewPort());
 }
 
 void Editor::refreshScreen()
@@ -299,26 +295,31 @@ void Editor::closeActiveWindow()
     assert(false && "closeActiveWindow() is not implemented yet\n");
 }
 
+void Editor::doSplit(Window& left, Window &right)
+{
+    auto& left_rect = left.getRect();
+    auto& right_rect = right.getRect();
+    
+    left_rect.width /= 2.f;
+    right_rect.width = left_rect.width;
+    right_rect.x = left_rect.x + left_rect.width;
+
+    int char_width = FONT_CHAR_WIDTH * FONT_SCALE;
+    int char_height = FONT_CHAR_HEIGHT * FONT_SCALE;
+    left.recalcViewPort(char_width, char_height);
+    right.recalcViewPort(char_width, char_height);
+}
+
 void Editor::horizontalSplitScreen()
 {
-    if (!active_window) return;
+    if (!active_window) assert(false && "horizontalSplitScreen() always assumes active_window is valid\n");
     
     std::shared_ptr<Window> new_window = createNewWindow(active_window);
     
-    auto& active_window_rect = active_window->getRect();
-    auto& active_window_view_port = active_window->getViewPort();
-    auto& new_window_rect = new_window->getRect();
-    auto& new_window_view_port = new_window->getViewPort();
-
-    active_window_rect.width /= 2.f;
-    active_window_view_port.visible_cols = static_cast<std::size_t>(active_window_rect.width / (FONT_CHAR_WIDTH * FONT_SCALE));
-
-    new_window_rect.width /= 2.f;
-    new_window_rect.x = active_window_rect.x + active_window_rect.width;
-    new_window_view_port.visible_cols = static_cast<std::size_t>(new_window_rect.width / (FONT_CHAR_WIDTH * FONT_SCALE));
+    doSplit(*active_window, *new_window);
     
-    scrollToCursor(active_window->getCursor(), active_window_view_port);
-    scrollToCursor(new_window->getCursor(), new_window_view_port);
+    scrollToCursor(active_window->getCursor(), active_window->getViewPort());
+    scrollToCursor(new_window->getCursor(), active_window->getViewPort());
 }
 
 void Editor::saveToFile(const std::string& file_path)
@@ -435,13 +436,26 @@ void charCallback(GLFWwindow* window, unsigned int codepoint)
     }
 }
 
+void customWindowSizeCallback(GLFWwindow* window, int new_width, int new_height)
+{
+    (void)window;
+    rlViewport(0, 0, new_width, new_height);
+    Editor::getInstance().onResize(new_width, new_height);
+}
+
+// TODO: adjust screen on run time
+// TODO: render visible line to distinguish window bounds on splitted screen
+// TODO: implement close active window
+// TODO: switch between opened windows
+
 int main(int argc, char *argv[])
 {
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "");
     
-    GLFWwindow *ctx = glfwGetCurrentContext(); 
+    GLFWwindow *ctx = glfwGetCurrentContext();
     glfwSetKeyCallback(ctx, keyCallback);
     glfwSetCharCallback(ctx, charCallback);
+    glfwSetWindowSizeCallback(ctx, customWindowSizeCallback);
     
     SetTargetFPS(60);
     

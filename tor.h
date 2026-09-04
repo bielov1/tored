@@ -61,7 +61,9 @@ public:
     void backspaceOnCursor();
     void newlineOnCursor();
     void scrollToCursor(const Cursor& cur, ViewPort& vp);
-    
+
+    void doSplit(Window& left, Window &right);
+    void onResize(int new_window_width, int new_window_height);
     void refreshScreen();
     void closeActiveWindow();
     void horizontalSplitScreen();

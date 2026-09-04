@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "raylib.h"
+#include "rlgl.h"
 #include "buffer.h"
 #include "cursor.h"
 #include "la.h"
@@ -71,10 +72,12 @@ public:
             child->draw(font, scale);
         }
     }
+    
     void add(std::shared_ptr<Graphic> component) override {
 	graphics.push_back(component);
     }
-    //remove(std::shared_ptr<Graphic> component) override {}
+    //remove(std::shared_ptr<Graphic> component) overrikkde {}
+    void recalcViewPort(int char_width, int char_height);
 
     Rectangle& getRect()    { return rect; }
     ViewPort& getViewPort() { return view_port; }
