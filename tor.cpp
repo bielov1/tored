@@ -183,14 +183,19 @@ void Editor::scrollToCursor(const Cursor& cur, ViewPort& vp)
     if (cur_line < vp.first_visible_line)
 	vp.first_visible_line = cur_line < padding ? 0 : cur_line - padding;
 
-    if (cur_line >= vp.first_visible_line + vp.visible_lines)
+    // fix in scrollToCursor bug when padding not being adaptive to vp.visible_lines, causing first_visible_line/col jump over its visible lines
+    if (cur_line >= vp.first_visible_line + vp.visible_lines) {
+	if (padding > vp.visible_lines) padding = vp.visible_lines - 1;
 	vp.first_visible_line = cur_line - vp.visible_lines + padding;
+    }
 
     if (cur_col < vp.first_visible_col)
 	vp.first_visible_col = cur_col < padding ? 0 : cur_col - padding;
 
-    if (cur_col >= vp.first_visible_col + vp.visible_cols)
+    if (cur_col >= vp.first_visible_col + vp.visible_cols) {
+	if (padding > vp.visible_cols) padding = vp.visible_cols - 1;
 	vp.first_visible_col = cur_col - vp.visible_cols + padding;
+    }
 }    
 
 void Editor::insertCharOnActiveWindow(char c)
@@ -238,6 +243,7 @@ void Editor::splitScreen(SplitType sp)
     if (!active_window) throw "splitScreen() always assumes active_window is valid\n";
 
     root_tree = splitWindow(std::move(root_tree), active_window, sp);
+    // Gotta check this on horizontal split
     recalculateLayout(root_tree, screen_width, screen_height);
     scrollToCursor(active_window->getCursor(), active_window->getViewPort());
 }
