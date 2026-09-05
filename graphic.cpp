@@ -1,6 +1,6 @@
 #include "graphic.h"
 
-void BufferView::drawChar(Font font, char c, Vec2f pos, int scale, Color color)
+void BufferView::drawChar(const Font& font, char c, int char_width, int char_height, Vec2f pos, Color color)
 {
     int idx = GetGlyphIndex(font, (int)c);
     if (idx >= 0 && idx < font.glyphCount) {
@@ -8,14 +8,14 @@ void BufferView::drawChar(Font font, char c, Vec2f pos, int scale, Color color)
 	Rectangle dst = {
 	    pos.x,
 	    pos.y,
-	    src.width * scale,
-	    src.height * scale
+	    static_cast<float>(char_width),
+	    static_cast<float>(char_height)
 	};
 	DrawTexturePro(font.texture, src, dst, Vector2{ 0.0f, 0.0 }, 0.0f, color);
     }    
 }
 
-void BufferView::draw(Font font, int scale)
+void BufferView::draw(const Font& font, int char_width, int char_height)
 {
     assert(font.recs);
     assert(font.glyphCount > 0);
@@ -28,8 +28,6 @@ void BufferView::draw(Font font, int scale)
     std::size_t j;
     
     std::size_t text_size = text.size();    
-    float char_w = font.recs[0].width * scale;
-    float char_h = font.recs[0].height * scale;
 
     Vec2f start_pos = { window_rect->x, window_rect->y };
     Vec2f draw_char_pos = start_pos;
@@ -43,12 +41,12 @@ void BufferView::draw(Font font, int scale)
 	for (j = view_port->first_visible_col; j < line_size; ++j) {
             if (col_idx >= view_port->visible_cols) break;
 
-            drawChar(font, line_text[j], draw_char_pos, scale, WHITE);
-            draw_char_pos.x += char_w;
+            drawChar(font, line_text[j], char_width, char_height, draw_char_pos, WHITE);
+            draw_char_pos.x += char_width;
             col_idx++;
         }
 
-        draw_char_pos.y += char_h;
+        draw_char_pos.y += char_height;
         draw_char_pos.x  = start_pos.x;
     }
 
@@ -57,15 +55,15 @@ void BufferView::draw(Font font, int scale)
     float rel_line = static_cast<float>(cursor->getLine() - view_port->first_visible_line);
    
     Vec2f cursor_pixel_pos{
-	start_pos.x + rel_col * char_w,
-	start_pos.y + rel_line * char_h
+	start_pos.x + rel_col * char_width,
+	start_pos.y + rel_line * char_height
     };
     
     Rectangle rec = {
 	.x      = cursor_pixel_pos.x,
 	.y      = cursor_pixel_pos.y,
-	.width  = char_w,
-	.height = char_h
+	.width  = static_cast<float>(char_width),
+	.height = static_cast<float>(char_height)
     };
     
     DrawRectangleRec(rec, WHITE);
@@ -75,14 +73,19 @@ void BufferView::draw(Font font, int scale)
 	if (cursor->getCol() < line_size) {
 	    char c = line_text[cursor->getCol()];
 	    if (c != '\n')
-		drawChar(font, c, cursor_pixel_pos, scale, BLACK);
+		drawChar(font, c, char_width, char_height, cursor_pixel_pos, BLACK);
 	}
     }
 }
-
 
 void Window::recalcViewPort(int char_width, int char_height)
 {
     view_port.visible_cols = static_cast<std::size_t>(rect.width / char_width);
     view_port.visible_lines = static_cast<std::size_t>(rect.height / char_height);
+}
+
+void Window::attachBufferView()
+{
+    auto view = std::make_shared<BufferView>(&rect, &view_port, &cursor, buffer.get());
+    add(view);
 }

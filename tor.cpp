@@ -2,15 +2,15 @@
 #include "tor.h"
 
 Editor::Editor()
-    : max_scroll_line{1024}
-    , max_scroll_col{256}
+    : active_window( nullptr )
+    , root_tree{ Leaf{ 0, 0, nullptr } }
+    , max_scroll_line{ 1024 }
+    , max_scroll_col{ 256 }
     , font{}
 {
     size_t font_size = _binary_charmap_oldschool_white_png_end - _binary_charmap_oldschool_white_png_start;
-    unsigned char *font_data = (unsigned char *)_binary_charmap_oldschool_white_png_start;
-    std::span<const unsigned char> data_view{font_data, font_size};
-    font = loadPNGDataAsFont(data_view, FONT_COLS, FONT_ROWS);
-    setActiveWindow(createNewWindow(SCREEN_WIDTH, SCREEN_HEIGHT));
+    auto font_data = reinterpret_cast<const unsigned char*>(_binary_charmap_oldschool_white_png_start);
+    font = loadPNGDataAsFont({font_data, font_size}, FONT_COLS, FONT_ROWS);
 }
 
 Editor::~Editor()
@@ -20,7 +20,7 @@ Editor::~Editor()
 
 void Editor::handleKeyAction(KeyInputTag key)
 {
-    static_assert(KeyInputTag::__static_key_input_tag_count == 8);
+    static_assert(KeyInputTag::__static_key_input_tag_count == 9);
     switch (key) {
     case KeyInputTag::KIT_BACKSPACE:
 	backspaceOnCursor();
@@ -41,7 +41,10 @@ void Editor::handleKeyAction(KeyInputTag key)
 	moveCursorDown();
 	break;
     case KeyInputTag::KIT_F2:
-	horizontalSplitScreen();
+	splitScreen(SplitType::Horizontal);
+	break;
+    case KeyInputTag::KIT_F3:
+	splitScreen(SplitType::Vertical);
 	break;
     // case GLFW_KEY_F5:
     // 	std::fprintf(stdout, "F5 was pressed\n");
@@ -51,11 +54,6 @@ void Editor::handleKeyAction(KeyInputTag key)
 	std::fprintf(stderr, "[WARNING] uknown key input\n");
     }
 }
-
-// IDEA: editor should have main window from which
-// peer windows constantly retrives position of main window cursor
-// to open the exact file name the cursor hovers. Just like threads.
-// should all peer windows do that?
 
 std::shared_ptr<Window> Editor::createNewWindow(int window_width, int window_height)
 {
@@ -82,45 +80,14 @@ std::shared_ptr<Window> Editor::createNewWindow(int window_width, int window_hei
         new_cursor,
 	std::move(new_buffer)
     );
-    
-    addGraphicsToWindow(new_window);
-    
-    open_windows.push_back(new_window);
+
+    new_window->attachBufferView();
     return new_window;
-}
-
-std::shared_ptr<Window> Editor::createNewWindow(std::shared_ptr<Window> other_window)
-{
-    if (!other_window) return nullptr;
-
-    auto new_window = std::make_shared<Window>(
-        other_window->getRect(),
-        other_window->getViewPort(),
-        other_window->getCursor(),
-	other_window->getBufferShared()
-    );
-    
-    addGraphicsToWindow(new_window);
-    
-    open_windows.push_back(new_window);
-    return new_window; 
-}
-
-void Editor::addGraphicsToWindow(std::shared_ptr<Window> window)
-{
-    auto buffer_view = std::make_shared<BufferView>(
-	&window->getRect(),
-	&window->getViewPort(),
-	&window->getCursor(),
-	&window->getBuffer()
-    );
-    
-    window->add(buffer_view);
 }
 
 void Editor::moveCursorLeft()
 {
-    if (!active_window) assert(false && "moveCursorLeft() always assumes active_window is valid\n");
+    if (!active_window) throw "moveCursorLeft() always assumes active_window is valid\n";
     auto& buf = active_window->getBuffer();
     auto& cur = active_window->getCursor();
 
@@ -160,7 +127,7 @@ void Editor::moveCursorRight()
 
 void Editor::moveCursorUp()
 {
-    if (!active_window) assert(false && "moveCursorUp() always assumes active_window is valid\n");
+    if (!active_window) throw "moveCursorUp() always assumes active_window is valid\n";
     auto& buf = active_window->getBuffer();
     auto& cur = active_window->getCursor();
 
@@ -179,7 +146,7 @@ void Editor::moveCursorUp()
 
 void Editor::moveCursorDown()
 {
-    if (!active_window) assert(false && "moveCursorDown() always assumes active_window is valid\n");
+    if (!active_window) throw "moveCursorDown() always assumes active_window is valid\n";
     auto& buf = active_window->getBuffer();
     auto& cur = active_window->getCursor();
     
@@ -198,7 +165,7 @@ void Editor::moveCursorDown()
 
 void Editor::backspaceOnCursor()
 {
-    if (!active_window) assert(false && "backspaceOnCursor() always assumes active_window is valid\n");
+    if (!active_window) throw "backspaceOnCursor() always assumes active_window is valid\n";
     auto& buf = active_window->getBuffer();
     auto& cur = active_window->getCursor();
     
@@ -224,7 +191,7 @@ void Editor::backspaceOnCursor()
 
 void Editor::newlineOnCursor()
 {
-    if (!active_window) assert(false && "newlineOnCursor() always assumes active_window is valid\n");
+    if (!active_window) throw "newlineOnCursor() always assumes active_window is valid\n";
     auto& buf = active_window->getBuffer();
     auto& cur = active_window->getCursor();
 
@@ -256,7 +223,7 @@ void Editor::scrollToCursor(const Cursor& cur, ViewPort& vp)
 
 void Editor::insertCharOnActiveWindow(char c)
 {
-    if (!active_window) assert(false && "insertCharOnActiveWindow() always assumes active_window is valid\n");
+    if (!active_window) throw "insertCharOnActiveWindow() always assumes active_window is valid\n";
 
     auto& buf = active_window->getBuffer();
     auto& cur = active_window->getCursor();
@@ -270,24 +237,23 @@ void Editor::insertCharOnActiveWindow(char c)
 void Editor::onResize(int new_window_width, int new_window_height)
 {
     // split screen adjustment is not implemented!
-    if (!active_window) assert(false && "onResize() always assumes active_window is valid\n");
-    int char_width = FONT_CHAR_WIDTH * FONT_SCALE;
-    int char_height = FONT_CHAR_HEIGHT * FONT_SCALE;
+    // we should create a structure for split screen
+    if (!active_window) throw "onResize() always assumes active_window is valid\n";
 
-    // only for single active_window
-    active_window->getRect().width = new_window_width;
-    active_window->getRect().height = new_window_height;
-    active_window->recalcViewPort(char_width, char_height);
-    scrollToCursor(active_window->getCursor(), active_window->getViewPort());
+    assert(false && "onResize is not implemented yet\n");
 }
 
 void Editor::refreshScreen()
 {
-    for (const auto& window : open_windows) {
-	if (window) {
-	    window->draw(font, FONT_SCALE);
-	}
+    if (!active_window) {
+	active_window = createNewWindow(SCREEN_WIDTH, SCREEN_HEIGHT);
+	root_tree = Leaf{
+	    FONT_CHAR_WIDTH * FONT_SCALE,
+	    FONT_CHAR_HEIGHT * FONT_SCALE,
+	    active_window
+	};
     }
+    std::visit(RenderVisitor{font}, root_tree);
 }
 
 void Editor::closeActiveWindow()
@@ -295,31 +261,12 @@ void Editor::closeActiveWindow()
     assert(false && "closeActiveWindow() is not implemented yet\n");
 }
 
-void Editor::doSplit(Window& left, Window &right)
+void Editor::splitScreen(SplitType sp)
 {
-    auto& left_rect = left.getRect();
-    auto& right_rect = right.getRect();
-    
-    left_rect.width /= 2.f;
-    right_rect.width = left_rect.width;
-    right_rect.x = left_rect.x + left_rect.width;
+    if (!active_window) throw "splitScreen() always assumes active_window is valid\n";
 
-    int char_width = FONT_CHAR_WIDTH * FONT_SCALE;
-    int char_height = FONT_CHAR_HEIGHT * FONT_SCALE;
-    left.recalcViewPort(char_width, char_height);
-    right.recalcViewPort(char_width, char_height);
-}
-
-void Editor::horizontalSplitScreen()
-{
-    if (!active_window) assert(false && "horizontalSplitScreen() always assumes active_window is valid\n");
-    
-    std::shared_ptr<Window> new_window = createNewWindow(active_window);
-    
-    doSplit(*active_window, *new_window);
-    
-    scrollToCursor(active_window->getCursor(), active_window->getViewPort());
-    scrollToCursor(new_window->getCursor(), active_window->getViewPort());
+    root_tree = splitWindow(std::move(root_tree), active_window, sp);
+    recalculateLayout(root_tree);
 }
 
 void Editor::saveToFile(const std::string& file_path)
@@ -401,7 +348,7 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
     (void)window;
     (void)scancode;
     (void)mods;
-    static_assert(KeyInputTag::__static_key_input_tag_count == 8);
+    static_assert(KeyInputTag::__static_key_input_tag_count == 9);
     if (key == GLFW_KEY_BACKSPACE && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
 	Editor::getInstance().handleKeyAction(KeyInputTag::KIT_BACKSPACE);
     }
@@ -423,9 +370,13 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
     if (key == GLFW_KEY_F2 && action == GLFW_PRESS) {
         Editor::getInstance().handleKeyAction(KeyInputTag::KIT_F2);
     }
+    if (key == GLFW_KEY_F3 && action == GLFW_PRESS) {
+        Editor::getInstance().handleKeyAction(KeyInputTag::KIT_F3);
+    }
     if (key == GLFW_KEY_F5 && action == GLFW_PRESS) {
         Editor::getInstance().handleKeyAction(KeyInputTag::KIT_F5);
     }
+    
 }
 
 void charCallback(GLFWwindow* window, unsigned int codepoint)
