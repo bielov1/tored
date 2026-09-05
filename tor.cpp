@@ -6,6 +6,8 @@ Editor::Editor()
     , root_tree{ Leaf{ 0, 0, nullptr } }
     , max_scroll_line{ 1024 }
     , max_scroll_col{ 256 }
+    , screen_width{ DEFAULT_SCREEN_WIDTH }
+    , screen_height{ DEFAULT_SCREEN_HEIGHT }
     , font{}
 {
     size_t font_size = _binary_charmap_oldschool_white_png_end - _binary_charmap_oldschool_white_png_start;
@@ -53,36 +55,6 @@ void Editor::handleKeyAction(KeyInputTag key)
     default:
 	std::fprintf(stderr, "[WARNING] uknown key input\n");
     }
-}
-
-std::shared_ptr<Window> Editor::createNewWindow(int window_width, int window_height)
-{
-    Rectangle new_rect = {
-	.x = 0.0f,
-	.y = 0.0f,
-	.width = static_cast<float>(window_width),
-	.height = static_cast<float>(window_height)
-    };
-    
-    ViewPort new_view_port = {
-	.first_visible_line = 0,
-	.first_visible_col  = 0,
-	.visible_lines = static_cast<std::size_t>(window_height / (FONT_CHAR_HEIGHT * FONT_SCALE)),
-	.visible_cols  = static_cast<std::size_t>(window_width / (FONT_CHAR_WIDTH * FONT_SCALE))
-    };
-    
-    Cursor new_cursor{};
-    auto new_buffer = std::make_shared<Buffer>();
-    
-    auto new_window = std::make_shared<Window>(
-        new_rect,
-        new_view_port,
-        new_cursor,
-	std::move(new_buffer)
-    );
-
-    new_window->attachBufferView();
-    return new_window;
 }
 
 void Editor::moveCursorLeft()
@@ -234,19 +206,19 @@ void Editor::insertCharOnActiveWindow(char c)
     scrollToCursor(cur, view_port);
 }
 
-void Editor::onResize(int new_window_width, int new_window_height)
+void Editor::onResize(int new_screen_width, int new_screen_height)
 {
-    // split screen adjustment is not implemented!
-    // we should create a structure for split screen
     if (!active_window) throw "onResize() always assumes active_window is valid\n";
-
-    assert(false && "onResize is not implemented yet\n");
+    screen_width = new_screen_width;
+    screen_height = new_screen_height;
+    recalculateLayout(root_tree, new_screen_width, new_screen_height);
+    scrollToCursor(active_window->getCursor(), active_window->getViewPort());
 }
 
 void Editor::refreshScreen()
 {
     if (!active_window) {
-	active_window = createNewWindow(SCREEN_WIDTH, SCREEN_HEIGHT);
+	active_window = createNewWindow(screen_width, screen_height);
 	root_tree = Leaf{
 	    FONT_CHAR_WIDTH * FONT_SCALE,
 	    FONT_CHAR_HEIGHT * FONT_SCALE,
@@ -266,7 +238,8 @@ void Editor::splitScreen(SplitType sp)
     if (!active_window) throw "splitScreen() always assumes active_window is valid\n";
 
     root_tree = splitWindow(std::move(root_tree), active_window, sp);
-    recalculateLayout(root_tree);
+    recalculateLayout(root_tree, screen_width, screen_height);
+    scrollToCursor(active_window->getCursor(), active_window->getViewPort());
 }
 
 void Editor::saveToFile(const std::string& file_path)
@@ -401,7 +374,7 @@ void customWindowSizeCallback(GLFWwindow* window, int new_width, int new_height)
 
 int main(int argc, char *argv[])
 {
-    InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "");
+    InitWindow(DEFAULT_SCREEN_WIDTH, DEFAULT_SCREEN_HEIGHT, "");
     
     GLFWwindow *ctx = glfwGetCurrentContext();
     glfwSetKeyCallback(ctx, keyCallback);

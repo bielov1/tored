@@ -129,7 +129,6 @@ struct Node
     {}
     
     SplitType split_type;
-    int width;
     float ratio;
     LayoutTree left;
     LayoutTree right;
@@ -222,16 +221,58 @@ struct SplitVisitor
 
 struct LayoutVisitor
 {
+    Rectangle current_bounds;
+    
     void operator()(Leaf& leaf)
-    {	
+    {
+	leaf.window->setRect(current_bounds);
 	leaf.window->recalcViewPort(leaf.char_width, leaf.char_height);
     }
 
     void operator()(std::unique_ptr<Node>& node)
     {
-	if (node) {
-	    std::visit(*this, node->left);
-	    std::visit(*this, node->right);
+	if (!node) return;
+
+	if (node->split_type == SplitType::Horizontal) {
+	    float left_width = current_bounds.width * node->ratio;
+	    float right_width = current_bounds.width - left_width;
+
+	    Rectangle left_bounds = {
+		.x = current_bounds.x,
+		.y = current_bounds.y,
+		.width = left_width,
+		.height = current_bounds.height
+	    };
+
+	    Rectangle right_bounds = {
+		.x = current_bounds.x + left_width,
+		.y = current_bounds.y,
+		.width = right_width,
+		.height = current_bounds.height
+	    };
+
+	    std::visit(LayoutVisitor{ left_bounds }, node->left);
+	    std::visit(LayoutVisitor{ right_bounds}, node->right);
+	} else if (node->split_type == SplitType::Vertical) {
+	    float top_height = current_bounds.height * node->ratio;
+	    float bottom_height = current_bounds.height - top_height;
+
+	    Rectangle top_bounds = {
+		.x = current_bounds.x,
+		.y = current_bounds.y,
+		.width = current_bounds.width,
+		.height = top_height
+	    };
+
+	    Rectangle bottom_bounds = {
+		.x = current_bounds.x,
+		.y = current_bounds.y + top_height,
+		.width = current_bounds.width,
+		.height = bottom_height
+	    };
+
+	    std::visit(LayoutVisitor{ top_bounds }, node->left);
+	    std::visit(LayoutVisitor{ bottom_bounds} , node->right);
 	}
     }
 };
@@ -242,8 +283,14 @@ inline LayoutTree splitWindow(LayoutTree tree, std::shared_ptr<Window> target, S
     return std::visit(visitor, tree);
 }
 
-inline void recalculateLayout(LayoutTree& tree)
+inline void recalculateLayout(LayoutTree& tree, int new_screen_width, int new_screen_height)
 {
-    std::visit(LayoutVisitor{}, tree);
+    Rectangle screen_bounds = {
+        .x = 0.0f,
+        .y = 0.0f,
+        .width = static_cast<float>(new_screen_width),
+        .height = static_cast<float>(new_screen_height)
+    };
+    std::visit(LayoutVisitor{ screen_bounds }, tree);
 }
 // ============================================================================
