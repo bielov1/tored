@@ -78,6 +78,31 @@ void BufferView::draw(const Font& font, int char_width, int char_height)
     }
 }
 
+void Window::scrollToCursor()
+{
+    std::size_t cur_line = cursor.getLine();
+    std::size_t cur_col = cursor.getCol();
+
+    std::size_t padding = 5;
+    
+    if (cur_line < view_port.first_visible_line)
+	view_port.first_visible_line = cur_line < padding ? 0 : cur_line - padding;
+
+    // fix in scrollToCursor bug when padding not being adaptive to view_port.visible_lines, causing first_visible_line/col jump over its visible lines
+    if (cur_line >= view_port.first_visible_line + view_port.visible_lines) {
+	if (padding > view_port.visible_lines) padding = view_port.visible_lines - 1;
+	view_port.first_visible_line = cur_line - view_port.visible_lines + padding;
+    }
+
+    if (cur_col < view_port.first_visible_col)
+	view_port.first_visible_col = cur_col < padding ? 0 : cur_col - padding;
+
+    if (cur_col >= view_port.first_visible_col + view_port.visible_cols) {
+	if (padding > view_port.visible_cols) padding = view_port.visible_cols - 1;
+	view_port.first_visible_col = cur_col - view_port.visible_cols + padding;
+    }
+}
+
 void Window::recalcViewPort(int char_width, int char_height)
 {
     view_port.visible_cols = static_cast<std::size_t>(rect.width / char_width);

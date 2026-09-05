@@ -26,8 +26,7 @@ class Graphic
 public:
     virtual ~Graphic() = default;
     
-    virtual void draw(const Font& font, int char_width, int char_height) = 0;
-    
+    virtual void draw(const Font& font, int char_width, int char_height) = 0;    
     virtual void add(std::shared_ptr<Graphic> component) {}
     //virtual remove(std::shared_ptr<Graphic> component) {}
 };
@@ -80,6 +79,8 @@ public:
 	graphics.push_back(component);
     }
     //remove(std::shared_ptr<Graphic> component) override {}
+    
+    void scrollToCursor();
     void recalcViewPort(int char_width, int char_heigth);
     void attachBufferView();
     void setRect(const Rectangle& new_rect) { rect = new_rect; }
@@ -151,7 +152,9 @@ struct SplitVisitor
 		};
 
 		leaf.window->setRect(left_rect);
-		
+		leaf.window->recalcViewPort(leaf.char_width, leaf.char_height);
+		leaf.window->scrollToCursor();
+		    
 		Rectangle right_rect = {
 		    .x = rec.x + rec.width * ratio,
 		    .y = rec.y,
@@ -166,6 +169,8 @@ struct SplitVisitor
 		    leaf.window->getBufferShared()
                 );
 
+		new_window->recalcViewPort(leaf.char_width, leaf.char_height);
+		new_window->scrollToCursor();
 		new_window->attachBufferView();
 	        return std::make_unique<Node>(
 		    split_type,
@@ -182,6 +187,8 @@ struct SplitVisitor
 		};
 
 		leaf.window->setRect(top_rect);
+		leaf.window->recalcViewPort(leaf.char_width, leaf.char_height);
+		leaf.window->scrollToCursor();
 
 		Rectangle bottom_rect = {
 		    .x = rec.x,
@@ -197,6 +204,8 @@ struct SplitVisitor
 		    leaf.window->getBufferShared()
 		);
 
+		new_window->recalcViewPort(leaf.char_width, leaf.char_height);
+		new_window->scrollToCursor();
 		new_window->attachBufferView();
 		return std::make_unique<Node>(
 		    split_type,
@@ -219,6 +228,12 @@ struct SplitVisitor
     }
 };
 
+inline LayoutTree splitWindow(LayoutTree tree, std::shared_ptr<Window> target, SplitType sp, float ratio = 0.5f)
+{
+    SplitVisitor visitor{target, sp, ratio};
+    return std::visit(visitor, tree);
+}
+
 struct LayoutVisitor
 {
     Rectangle current_bounds;
@@ -227,6 +242,7 @@ struct LayoutVisitor
     {
 	leaf.window->setRect(current_bounds);
 	leaf.window->recalcViewPort(leaf.char_width, leaf.char_height);
+	leaf.window->scrollToCursor();
     }
 
     void operator()(std::unique_ptr<Node>& node)
@@ -276,12 +292,6 @@ struct LayoutVisitor
 	}
     }
 };
-
-inline LayoutTree splitWindow(LayoutTree tree, std::shared_ptr<Window> target, SplitType sp, float ratio = 0.5f)
-{
-    SplitVisitor visitor{target, sp, ratio};
-    return std::visit(visitor, tree);
-}
 
 inline void recalculateLayout(LayoutTree& tree, int new_screen_width, int new_screen_height)
 {

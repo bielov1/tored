@@ -90,8 +90,8 @@ public:
     void backspaceOnCursor();
     void newlineOnCursor();
     void scrollToCursor(const Cursor& cur, ViewPort& vp);
-    
-    void splitScreen(SplitType sp);
+   
+    void splitActiveWindow(SplitType sp);
     void onResize(int new_window_width, int new_window_height);
     void refreshScreen();
     void closeActiveWindow();
