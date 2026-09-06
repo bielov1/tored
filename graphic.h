@@ -55,6 +55,12 @@ private:
     Cursor *cursor;
     Buffer *buffer;
 };
+struct Leaf;
+struct Node;
+using LayoutTree = std::variant<
+    Leaf,
+    std::unique_ptr<Node>
+    >;
 
 class Window : public Graphic // add Observer that changes font on update()
 {
@@ -86,6 +92,7 @@ public:
     void moveCursorRight();
     void moveCursorUp();
     void moveCursorDown();
+    void backspaceOnCursor(LayoutTree& root_tree);
     void newlineOnCursor();
     void insertChar(char c);
     void scrollToCursor();
@@ -124,11 +131,7 @@ struct Leaf
     int char_height;
     std::shared_ptr<Window> window;
 };
-struct Node;
-using LayoutTree = std::variant<
-    Leaf,
-    std::unique_ptr<Node>
-    >;
+
 struct Node
 {
     Node(SplitType st, float rat, LayoutTree l, LayoutTree r)
@@ -148,46 +151,14 @@ struct SplitVisitor
     std::shared_ptr<Window> target_window;
     SplitType split_type;
     float ratio;
-
+    
+    std::shared_ptr<Window> created_window{};
+    
     LayoutTree operator()(Leaf& leaf) {
 	if (leaf.window == target_window) {
 	    auto rec = leaf.window->getRect();
+	    
 	    if (split_type == SplitType::Horizontal) {
-		Rectangle left_rect = {
-		    .x = rec.x,
-		    .y = rec.y,
-		    .width = rec.width * ratio,
-		    .height = rec.height
-		};
-
-		leaf.window->setRect(left_rect);
-		leaf.window->recalcViewPort(leaf.char_width, leaf.char_height);
-		leaf.window->scrollToCursor();
-		    
-		Rectangle right_rect = {
-		    .x = rec.x + rec.width * ratio,
-		    .y = rec.y,
-		    .width = rec.width * (1.0f - ratio),
-		    .height = rec.height
-		};
-
-		auto new_window = std::make_shared<Window>(
-		    right_rect,
-		    leaf.window->getViewPort(),
-		    leaf.window->getCursor(),
-		    leaf.window->getBufferShared()
-                );
-
-		new_window->recalcViewPort(leaf.char_width, leaf.char_height);
-		new_window->scrollToCursor();
-		new_window->attachBufferView();
-	        return std::make_unique<Node>(
-		    split_type,
-		    ratio,
-		    Leaf{ leaf.char_width, leaf.char_height, leaf.window },
-		    Leaf{ leaf.char_width, leaf.char_height, new_window }
-		);
-	    } else if (split_type == SplitType::Vertical) {
 		Rectangle top_rect = {
 		    .x = rec.x,
 		    .y = rec.y,
@@ -206,41 +177,86 @@ struct SplitVisitor
 		    .height = rec.height * (1.0f - ratio)
 		};
 
-		auto new_window = std::make_shared<Window>(
+		created_window = std::make_shared<Window>(
 		    bottom_rect,
 		    leaf.window->getViewPort(),
-		    leaf.window->getCursor(),
+		    Cursor{
+			CursorDrawType::Hollow,
+			leaf.window->getCursor().getLine(),
+			leaf.window->getCursor().getCol()
+		    },
 		    leaf.window->getBufferShared()
 		);
+		
+	    } else if (split_type == SplitType::Vertical) {
+		Rectangle left_rect = {
+		    .x = rec.x,
+		    .y = rec.y,
+		    .width = rec.width * ratio,
+		    .height = rec.height
+		};
 
-		new_window->recalcViewPort(leaf.char_width, leaf.char_height);
-		new_window->scrollToCursor();
-		new_window->attachBufferView();
-		return std::make_unique<Node>(
-		    split_type,
-		    ratio,
-		    Leaf{ leaf.char_width, leaf.char_height, leaf.window },
-		    Leaf{ leaf.char_width, leaf.char_height, new_window }
-	        );
+		leaf.window->setRect(left_rect);
+		leaf.window->recalcViewPort(leaf.char_width, leaf.char_height);
+		leaf.window->scrollToCursor();
+		    
+		Rectangle right_rect = {
+		    .x = rec.x + rec.width * ratio,
+		    .y = rec.y,
+		    .width = rec.width * (1.0f - ratio),
+		    .height = rec.height
+		};
+
+		created_window = std::make_shared<Window>(
+		    right_rect,
+		    leaf.window->getViewPort(),
+		    Cursor{
+			CursorDrawType::Hollow,
+			leaf.window->getCursor().getLine(),
+			leaf.window->getCursor().getCol()
+		    },
+		    leaf.window->getBufferShared()
+                );
 	    }
+	    created_window->recalcViewPort(leaf.char_width, leaf.char_height);
+	    created_window->scrollToCursor();
+	    created_window->attachBufferView();
+
+	    return std::make_unique<Node>(
+                split_type,
+                ratio,
+                Leaf{ leaf.char_width, leaf.char_height, leaf.window },
+                Leaf{ leaf.char_width, leaf.char_height, created_window }
+            );
 	}
 
-	return Leaf{ leaf.char_width,
-		     leaf.char_height,
-		     leaf.window };
+	return leaf;
     }
 
     LayoutTree operator()(std::unique_ptr<Node>& node) {
+	if (!node) return nullptr;
+
 	node->left = std::visit(*this, node->left);
-        node->right = std::visit(*this, node->right);
+
+	if (!created_window) {
+	    node->right = std::visit(*this, node->right);
+
+	}
         return std::move(node);
     }
 };
 
-inline LayoutTree splitWindow(LayoutTree tree, std::shared_ptr<Window> target, SplitType sp, float ratio = 0.5f)
+inline LayoutTree splitWindow(LayoutTree tree,
+			      std::shared_ptr<Window> target,
+			      SplitType sp,
+			      std::shared_ptr<Window>& out_created_window,
+			      float ratio = 0.5f)
 {
-    SplitVisitor visitor{target, sp, ratio};
-    return std::visit(visitor, tree);
+    SplitVisitor visitor{ std::move(target), sp, ratio };
+    LayoutTree result_tree = std::visit(visitor, tree);
+    out_created_window = std::move(visitor.created_window);
+    
+    return result_tree;
 }
 
 struct LayoutVisitor
@@ -259,26 +275,6 @@ struct LayoutVisitor
 	if (!node) return;
 
 	if (node->split_type == SplitType::Horizontal) {
-	    float left_width = current_bounds.width * node->ratio;
-	    float right_width = current_bounds.width - left_width;
-
-	    Rectangle left_bounds = {
-		.x = current_bounds.x,
-		.y = current_bounds.y,
-		.width = left_width,
-		.height = current_bounds.height
-	    };
-
-	    Rectangle right_bounds = {
-		.x = current_bounds.x + left_width,
-		.y = current_bounds.y,
-		.width = right_width,
-		.height = current_bounds.height
-	    };
-
-	    std::visit(LayoutVisitor{ left_bounds }, node->left);
-	    std::visit(LayoutVisitor{ right_bounds}, node->right);
-	} else if (node->split_type == SplitType::Vertical) {
 	    float top_height = current_bounds.height * node->ratio;
 	    float bottom_height = current_bounds.height - top_height;
 
@@ -298,6 +294,26 @@ struct LayoutVisitor
 
 	    std::visit(LayoutVisitor{ top_bounds }, node->left);
 	    std::visit(LayoutVisitor{ bottom_bounds} , node->right);
+	} else if (node->split_type == SplitType::Vertical) {
+	    float left_width = current_bounds.width * node->ratio;
+	    float right_width = current_bounds.width - left_width;
+
+	    Rectangle left_bounds = {
+		.x = current_bounds.x,
+		.y = current_bounds.y,
+		.width = left_width,
+		.height = current_bounds.height
+	    };
+
+	    Rectangle right_bounds = {
+		.x = current_bounds.x + left_width,
+		.y = current_bounds.y,
+		.width = right_width,
+		.height = current_bounds.height
+	    };
+
+	    std::visit(LayoutVisitor{ left_bounds }, node->left);
+	    std::visit(LayoutVisitor{ right_bounds}, node->right);
 	}
     }
 };

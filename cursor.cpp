@@ -1,5 +1,10 @@
 #include "cursor.h"
 
+void Cursor::setDrawType(CursorDrawType new_draw_type)
+{
+    draw_type = new_draw_type;
+}
+
 void Cursor::setPosition(std::size_t new_line, std::size_t new_col)
 {
     line_idx = new_line;

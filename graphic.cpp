@@ -62,21 +62,32 @@ void BufferView::draw(const Font& font, int char_width, int char_height)
 	start_pos.y + rel_line * char_height
     };
     
-    Rectangle rec = {
+    Rectangle cursor_rec = {
 	.x      = cursor_pixel_pos.x,
 	.y      = cursor_pixel_pos.y,
 	.width  = static_cast<float>(char_width),
 	.height = static_cast<float>(char_height)
     };
+
     
-    DrawRectangleRec(rec, WHITE);
+    auto curr_cursor_draw_type = cursor->getDrawType();
+    if (curr_cursor_draw_type == CursorDrawType::Filled) {
+	DrawRectangleRec(cursor_rec, WHITE);
+    } else if (curr_cursor_draw_type == CursorDrawType::Hollow) {
+	DrawRectangleLinesEx(cursor_rec, 1.f, WHITE);
+    }
 
     if (cursor->getLine() < text_size) {
 	const auto& [line_size, line_text] = text[cursor->getLine()];
 	if (cursor->getCol() < line_size) {
 	    char c = line_text[cursor->getCol()];
-	    if (c != '\n')
-		drawChar(font, c, char_width, char_height, cursor_pixel_pos, BLACK);
+	    if (c != '\n') {
+		if (curr_cursor_draw_type == CursorDrawType::Filled) {
+		    drawChar(font, c, char_width, char_height, cursor_pixel_pos, BLACK);
+		} else if (curr_cursor_draw_type == CursorDrawType::Hollow) {
+		    drawChar(font, c, char_width, char_height, cursor_pixel_pos, WHITE);
+		}
+	    }
 	}
     }
 }
@@ -142,6 +153,29 @@ void Window::moveCursorDown()
 	cursor.setPosition(current_line + 1, new_col);
     }
     scrollToCursor();
+}
+
+void Window::backspaceOnCursor(LayoutTree& root_tree)
+{
+    const auto& text = buffer->getText();
+    if (text.empty()) return;
+
+    std::size_t current_line = cursor.getLine();
+    std::size_t current_col = cursor.getCol();
+
+    if (cursor.getCol() > 0) {
+	buffer->eraseCharAt(current_line, current_col - 1);
+	cursor.retreatCol();
+    } else if (current_line > 0) {
+	std::size_t prev_line = current_line - 1;
+        std::size_t prev_line_size = text[prev_line].first;
+	
+	buffer->appendLineTo(prev_line, current_line);
+	buffer->removeLine(current_line);
+	cursor.setPosition(prev_line, prev_line_size);
+    }
+
+    recalculateCursor(root_tree, cursor.getLine(), cursor.getCol());
 }
 
 void Window::newlineOnCursor()

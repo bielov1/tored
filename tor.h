@@ -3,7 +3,7 @@
 #include <print>
 #include <cstdio>
 #include <fstream>
-#include <iostream>
+#include <list>
 
 #include <string_view>
 
@@ -41,6 +41,7 @@ enum class KeyInputTag : int
     KIT_RIGHT,
     KIT_UP,
     KIT_DOWN,
+    KIT_F1,
     KIT_F2,
     KIT_F3,
     KIT_F5,
@@ -79,16 +80,18 @@ public:
     }    
 
     void handleKeyAction(KeyInputTag key);
-    void backspaceOnCursor();
-   
-    void splitActiveWindow(SplitType sp);
+    void backspace();
     void onResize(int new_window_width, int new_window_height);
     void refreshScreen();
-    void closeActiveWindow();
+    void closeAndSwitchActiveWindow();
+    void switchActiveWindow();
+    void splitActiveWindow(SplitType sp);
     void saveToFile(const std::string& file_path);
     // void loadFromFile(const std::string& file_path);
     Font loadPNGDataAsFont(std::span<const unsigned char> data, int cols, int rows);
-    
+
+    void cycleNextWindow();
+    void cyclePreviousWindow();
     std::shared_ptr<Window> getActiveWindow() { return active_window; }
     void setActiveWindow(std::shared_ptr<Window> new_active_window) { active_window = new_active_window; }
     
@@ -98,6 +101,8 @@ private:
     Editor();
     ~Editor();
 
+    // switch to linked list or deque
+    std::list<std::shared_ptr<Window>> window_list;
     std::shared_ptr<Window> active_window;
     LayoutTree root_tree;
     std::size_t max_scroll_line;
@@ -123,7 +128,7 @@ static std::shared_ptr<Window> createNewWindow(int window_width, int window_heig
 	.visible_cols  = static_cast<std::size_t>(window_width / (FONT_CHAR_WIDTH * FONT_SCALE))
     };
     
-    Cursor new_cursor{};
+    Cursor new_cursor{CursorDrawType::Filled, 0, 0};
     auto new_buffer = std::make_shared<Buffer>();
     
     auto new_window = std::make_shared<Window>(

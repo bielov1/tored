@@ -15,6 +15,7 @@ Editor::Editor()
     font = loadPNGDataAsFont({font_data, font_size}, FONT_COLS, FONT_ROWS);
     
     active_window = createNewWindow(screen_width, screen_height);
+    window_list.push_back(active_window);
     root_tree = Leaf{
 	FONT_CHAR_WIDTH * FONT_SCALE,
 	FONT_CHAR_HEIGHT * FONT_SCALE,
@@ -29,11 +30,11 @@ Editor::~Editor()
 
 void Editor::handleKeyAction(KeyInputTag key)
 {
-    static_assert(KeyInputTag::__static_key_input_tag_count == 9);
+    static_assert(KeyInputTag::__static_key_input_tag_count == 10);
     if (!active_window) throw "active_window always assumed to be valid\n";
     switch (key) {
     case KeyInputTag::KIT_BACKSPACE:
-	backspaceOnCursor();
+	backspace();
 	break;
     case KeyInputTag::KIT_ENTER:
 	active_window->newlineOnCursor();
@@ -50,6 +51,9 @@ void Editor::handleKeyAction(KeyInputTag key)
     case KeyInputTag::KIT_DOWN:
 	active_window->moveCursorDown();
 	break;
+    case KeyInputTag::KIT_F1:
+	switchActiveWindow();
+	break;    
     case KeyInputTag::KIT_F2:
 	splitActiveWindow(SplitType::Horizontal);
 	break;
@@ -65,32 +69,11 @@ void Editor::handleKeyAction(KeyInputTag key)
     }
 }
 
-void Editor::backspaceOnCursor()
+void Editor::backspace()
 {
-    auto& buf = active_window->getBuffer();
-    auto& cur = active_window->getCursor();
-    
-    const auto& text = buf.getText();
-    if (text.empty()) return;
-
-    std::size_t current_line = cur.getLine();
-    std::size_t current_col = cur.getCol();
-
-    if (cur.getCol() > 0) {
-	buf.eraseCharAt(current_line, current_col - 1);
-	cur.retreatCol();
-    } else if (current_line > 0) {
-	std::size_t prev_line = current_line - 1;
-        std::size_t prev_line_size = text[prev_line].first;
-	
-	buf.appendLineTo(prev_line, current_line);
-	buf.removeLine(current_line);
-	cur.setPosition(prev_line, prev_line_size);
-    }
-
-    recalculateCursor(root_tree, cur.getLine(), cur.getCol());
+    if (!active_window) throw "backspace() always assumes active_window is valid\n";
+    active_window->backspaceOnCursor(root_tree);
 }
-
 
 void Editor::onResize(int new_screen_width, int new_screen_height)
 {
@@ -105,17 +88,42 @@ void Editor::refreshScreen()
     std::visit(RenderVisitor{font}, root_tree);
 }
 
-void Editor::closeActiveWindow()
+void Editor::closeAndSwitchActiveWindow()
 {
-    assert(false && "closeActiveWindow() is not implemented yet\n");
+    assert(false && "closeAndSwitchActiveWindow() is not implemented yet\n");
 }
 
+void Editor::switchActiveWindow()
+{
+    if (!active_window) throw "backspace() always assumes active_window is valid\n";
+    if (window_list.size() > 1) {
+	cycleNextWindow();
+	active_window->getCursor().setDrawType(CursorDrawType::Hollow);
+	active_window = window_list.front();
+	active_window->getCursor().setDrawType(CursorDrawType::Filled);
+    }
+}
+
+// IDEA: rather than pressing keys F2/F3 to split window,
+// in future we can print it in text like : main.c | Makefile
+// which will display main.c and Makefile buffers split vertically
+//
+// so, workflow can look like this
+//
+// tor.cpp
+// make -B && ./tor -> command to execute by hovering line with cursor and pressing ctrl-e
+// tor.h | graphic.h
+// graphic.cpp
+// tor.cpp | graphic.cpp -- graphic.h (-- means split horizontally)
 void Editor::splitActiveWindow(SplitType sp)
 {
     if (!active_window) throw "splitScreen() always assumes active_window is valid\n";
 
-    root_tree = splitWindow(std::move(root_tree), active_window, sp);
-    // Gotta check this on horizontal split
+    std::shared_ptr<Window> new_window;
+    root_tree = splitWindow(std::move(root_tree), active_window, sp, new_window);
+    if (new_window) {
+	window_list.push_back(new_window);
+    }
     recalculateLayout(root_tree, screen_width, screen_height);
 }
 
@@ -193,12 +201,18 @@ Font Editor::loadPNGDataAsFont(std::span<const unsigned char> data, int cols, in
     return font;
 }
 
+void Editor::cycleNextWindow() 
+{
+    if (window_list.size() <= 1) return;
+    window_list.splice(window_list.end(), window_list, window_list.begin());
+}
+
 void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) 
 {
     (void)window;
     (void)scancode;
     (void)mods;
-    static_assert(KeyInputTag::__static_key_input_tag_count == 9);
+    static_assert(KeyInputTag::__static_key_input_tag_count == 10);
     if (key == GLFW_KEY_BACKSPACE && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
 	Editor::getInstance().handleKeyAction(KeyInputTag::KIT_BACKSPACE);
     }
@@ -216,6 +230,9 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
     }
     if (key == GLFW_KEY_DOWN && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
         Editor::getInstance().handleKeyAction(KeyInputTag::KIT_DOWN);
+    }
+    if (key == GLFW_KEY_F1 && action == GLFW_PRESS) {
+        Editor::getInstance().handleKeyAction(KeyInputTag::KIT_F1);
     }
     if (key == GLFW_KEY_F2 && action == GLFW_PRESS) {
         Editor::getInstance().handleKeyAction(KeyInputTag::KIT_F2);
@@ -246,8 +263,8 @@ void customWindowSizeCallback(GLFWwindow* window, int new_width, int new_height)
 
 // TODO: [DONE] adjust screen on run time
 // TODO: [DONE] render visible line to distinguish window bounds on splitted screen
-// TODO: implement close active window
-// TODO: [IN PROGRESS] switch between opened windows
+// TODO: implement close and switch active window
+// TODO: [DONE] switch between opened windows
 
 int main()
 {
