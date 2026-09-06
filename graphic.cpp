@@ -31,6 +31,9 @@ void BufferView::draw(const Font& font, int char_width, int char_height)
 
     Vec2f start_pos = { window_rect->x, window_rect->y };
     Vec2f draw_char_pos = start_pos;
+
+    // draw windows bounds
+    DrawRectangleLinesEx(*window_rect, 2.f, WHITE);
     
     // render text on screen
     std::size_t end_line = view_port->first_visible_line + view_port->visible_lines;
@@ -76,6 +79,84 @@ void BufferView::draw(const Font& font, int char_width, int char_height)
 		drawChar(font, c, char_width, char_height, cursor_pixel_pos, BLACK);
 	}
     }
+}
+
+void Window::moveCursorLeft()
+{
+    const auto& text = buffer->getText();
+    if (text.empty()) return;
+
+    std::size_t current_line = cursor.getLine();
+    
+    if (cursor.getCol() > 0) {
+	cursor.retreatCol();
+    } else if (current_line > 0) {
+	std::size_t prev_line_size = text[current_line - 1].first;
+	cursor.setPosition(current_line - 1, prev_line_size);
+    }
+    
+    scrollToCursor();
+}
+
+void Window::moveCursorRight()
+{
+    const auto& text = buffer->getText();
+    if (text.empty()) return;
+
+    std::size_t current_line = cursor.getLine();
+    std::size_t line_size = text[current_line].first;
+
+    if (cursor.getCol() < line_size) {
+        cursor.advanceCol();
+    } else if (current_line + 1 < text.size()) {
+        cursor.setPosition(current_line + 1, 0);
+    }
+    scrollToCursor();
+}
+
+void Window::moveCursorUp()
+{
+    const auto& text = buffer->getText();
+    if (text.empty()) return;
+
+    std::size_t current_line = cursor.getLine();
+	
+    if (current_line > 0) {
+	std::size_t prev_line_size = text[current_line - 1].first;
+	std::size_t new_col = std::ranges::clamp(cursor.getCol(), std::size_t{0}, prev_line_size);
+	cursor.setPosition(current_line - 1, new_col);
+    }
+    scrollToCursor();
+}
+
+void Window::moveCursorDown()
+{    
+    const auto& text = buffer->getText();
+    if (text.empty()) return;
+
+    std::size_t current_line = cursor.getLine();
+	
+    if (current_line + 1 < text.size()) {
+	std::size_t next_line_size = text[current_line + 1].first;
+	std::size_t new_col = std::ranges::clamp(cursor.getCol(), std::size_t{0}, next_line_size);
+	cursor.setPosition(current_line + 1, new_col);
+    }
+    scrollToCursor();
+}
+
+void Window::newlineOnCursor()
+{
+    buffer->splitLineAt(cursor.getLine(), cursor.getCol());
+    cursor.setPosition(cursor.getLine() + 1, 0);
+
+    scrollToCursor();
+}
+
+void Window::insertChar(char c)
+{
+    buffer->insertCharAt(cursor.getLine(), cursor.getCol(), c);
+    cursor.advanceCol();
+    scrollToCursor();
 }
 
 void Window::scrollToCursor()

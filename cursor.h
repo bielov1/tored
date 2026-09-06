@@ -7,6 +7,9 @@ class Cursor
 public:
 
     void setPosition(std::size_t new_line, std::size_t new_col);
+    void setLine(std::size_t new_line);
+    void setCol(std::size_t new_col);
+	
     void advanceCol();
     void retreatCol();
     void advanceLine();

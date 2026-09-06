@@ -4,6 +4,8 @@
 #include <memory>
 #include <cassert>
 #include <vector>
+#include <ranges>
+#include <algorithm>
 
 #include "raylib.h"
 #include "rlgl.h"
@@ -79,8 +81,15 @@ public:
 	graphics.push_back(component);
     }
     //remove(std::shared_ptr<Graphic> component) override {}
-    
+
+    void moveCursorLeft();
+    void moveCursorRight();
+    void moveCursorUp();
+    void moveCursorDown();
+    void newlineOnCursor();
+    void insertChar(char c);
     void scrollToCursor();
+    
     void recalcViewPort(int char_width, int char_heigth);
     void attachBufferView();
     void setRect(const Rectangle& new_rect) { rect = new_rect; }
@@ -293,6 +302,33 @@ struct LayoutVisitor
     }
 };
 
+struct CursorVisitor
+{
+    std::size_t active_window_cursor_line;
+    std::size_t active_window_cursor_col;
+
+    void operator()(Leaf& leaf)
+    {
+	if (leaf.window->getCursor().getLine() > active_window_cursor_line) {
+	    leaf.window->getCursor().setPosition(active_window_cursor_line,
+						 active_window_cursor_col);
+	} else if (leaf.window->getCursor().getLine() == active_window_cursor_line &&
+		   leaf.window->getCursor().getCol() > active_window_cursor_col) {
+	    leaf.window->getCursor().setCol(active_window_cursor_col);
+	}
+	
+	leaf.window->scrollToCursor();
+    }
+
+    void operator()(std::unique_ptr<Node>& node)
+    {
+	if (!node) return;
+
+	std::visit(*this, node->left);
+	std::visit(*this, node->right);
+    }
+};
+
 inline void recalculateLayout(LayoutTree& tree, int new_screen_width, int new_screen_height)
 {
     Rectangle screen_bounds = {
@@ -302,5 +338,10 @@ inline void recalculateLayout(LayoutTree& tree, int new_screen_width, int new_sc
         .height = static_cast<float>(new_screen_height)
     };
     std::visit(LayoutVisitor{ screen_bounds }, tree);
+}
+
+inline void recalculateCursor(LayoutTree& tree, std::size_t active_window_cursor_line, std::size_t active_window_cursor_col)
+{
+    std::visit(CursorVisitor{ active_window_cursor_line, active_window_cursor_col }, tree);
 }
 // ============================================================================

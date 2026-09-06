@@ -13,6 +13,13 @@ Editor::Editor()
     size_t font_size = _binary_charmap_oldschool_white_png_end - _binary_charmap_oldschool_white_png_start;
     auto font_data = reinterpret_cast<const unsigned char*>(_binary_charmap_oldschool_white_png_start);
     font = loadPNGDataAsFont({font_data, font_size}, FONT_COLS, FONT_ROWS);
+    
+    active_window = createNewWindow(screen_width, screen_height);
+    root_tree = Leaf{
+	FONT_CHAR_WIDTH * FONT_SCALE,
+	FONT_CHAR_HEIGHT * FONT_SCALE,
+	active_window
+    };
 }
 
 Editor::~Editor()
@@ -23,24 +30,25 @@ Editor::~Editor()
 void Editor::handleKeyAction(KeyInputTag key)
 {
     static_assert(KeyInputTag::__static_key_input_tag_count == 9);
+    if (!active_window) throw "active_window always assumed to be valid\n";
     switch (key) {
     case KeyInputTag::KIT_BACKSPACE:
 	backspaceOnCursor();
 	break;
     case KeyInputTag::KIT_ENTER:
-	newlineOnCursor();
+	active_window->newlineOnCursor();
 	break;
     case KeyInputTag::KIT_LEFT:
-	moveCursorLeft();
+	active_window->moveCursorLeft();
 	break;
     case KeyInputTag::KIT_RIGHT:
-	moveCursorRight();
+	active_window->moveCursorRight();
 	break;
     case KeyInputTag::KIT_UP:
-	moveCursorUp();
+	active_window->moveCursorUp();
 	break;
     case KeyInputTag::KIT_DOWN:
-	moveCursorDown();
+	active_window->moveCursorDown();
 	break;
     case KeyInputTag::KIT_F2:
 	splitActiveWindow(SplitType::Horizontal);
@@ -57,87 +65,8 @@ void Editor::handleKeyAction(KeyInputTag key)
     }
 }
 
-void Editor::moveCursorLeft()
-{
-    if (!active_window) throw "moveCursorLeft() always assumes active_window is valid\n";
-    auto& buf = active_window->getBuffer();
-    auto& cur = active_window->getCursor();
-
-    const auto& text = buf.getText();
-    if (text.empty()) return;
-
-    std::size_t current_line = cur.getLine();
-    
-    if (cur.getCol() > 0) {
-	cur.retreatCol();
-    } else if (current_line > 0) {
-	std::size_t prev_line_size = text[current_line - 1].first;
-	cur.setPosition(current_line - 1, prev_line_size);
-    }
-    active_window->scrollToCursor();
-}
-
-void Editor::moveCursorRight()
-{
-    if (!active_window) assert(false && "moveCursorRight() always assumes active_window is valid\n");
-    auto& buf = active_window->getBuffer();
-    auto& cur = active_window->getCursor();
-
-    const auto& text = buf.getText();
-    if (text.empty()) return;
-
-    std::size_t current_line = cur.getLine();
-    std::size_t line_size = text[current_line].first;
-
-    if (cur.getCol() < line_size) {
-        cur.advanceCol();
-    } else if (current_line + 1 < text.size()) {
-        cur.setPosition(current_line + 1, 0);
-    }
-    active_window->scrollToCursor();
-}
-
-void Editor::moveCursorUp()
-{
-    if (!active_window) throw "moveCursorUp() always assumes active_window is valid\n";
-    auto& buf = active_window->getBuffer();
-    auto& cur = active_window->getCursor();
-
-    const auto& text = buf.getText();
-    if (text.empty()) return;
-
-    std::size_t current_line = cur.getLine();
-	
-    if (current_line > 0) {
-	std::size_t prev_line_size = text[current_line - 1].first;
-	std::size_t new_col = std::ranges::clamp(cur.getCol(), std::size_t{0}, prev_line_size);
-	cur.setPosition(current_line - 1, new_col);
-    }
-    active_window->scrollToCursor();
-}
-
-void Editor::moveCursorDown()
-{
-    if (!active_window) throw "moveCursorDown() always assumes active_window is valid\n";
-    auto& buf = active_window->getBuffer();
-    auto& cur = active_window->getCursor();
-    
-    const auto& text = buf.getText();
-    if (text.empty()) return;
-
-    std::size_t current_line = cur.getLine();
-	
-    if (current_line + 1 < text.size()) {
-	std::size_t next_line_size = text[current_line + 1].first;
-	std::size_t new_col = std::ranges::clamp(cur.getCol(), std::size_t{0}, next_line_size);
-	cur.setPosition(current_line + 1, new_col);
-    }
-    active_window->scrollToCursor();
-}
-
 void Editor::backspaceOnCursor()
 {
-    if (!active_window) throw "backspaceOnCursor() always assumes active_window is valid\n";
     auto& buf = active_window->getBuffer();
     auto& cur = active_window->getCursor();
     
@@ -158,32 +87,10 @@ void Editor::backspaceOnCursor()
 	buf.removeLine(current_line);
 	cur.setPosition(prev_line, prev_line_size);
     }
-    active_window->scrollToCursor();    
+
+    recalculateCursor(root_tree, cur.getLine(), cur.getCol());
 }
 
-void Editor::newlineOnCursor()
-{
-    if (!active_window) throw "newlineOnCursor() always assumes active_window is valid\n";
-    auto& buf = active_window->getBuffer();
-    auto& cur = active_window->getCursor();
-
-    buf.splitLineAt(cur.getLine(), cur.getCol());
-    cur.setPosition(cur.getLine() + 1, 0);
-
-    active_window->scrollToCursor();
-}
-
-void Editor::insertCharOnActiveWindow(char c)
-{
-    if (!active_window) throw "insertCharOnActiveWindow() always assumes active_window is valid\n";
-
-    auto& buf = active_window->getBuffer();
-    auto& cur = active_window->getCursor();
-
-    buf.insertCharAt(cur.getLine(), cur.getCol(), c);
-    cur.advanceCol();
-    active_window->scrollToCursor();
-}
 
 void Editor::onResize(int new_screen_width, int new_screen_height)
 {
@@ -191,19 +98,10 @@ void Editor::onResize(int new_screen_width, int new_screen_height)
     screen_width = new_screen_width;
     screen_height = new_screen_height;
     recalculateLayout(root_tree, new_screen_width, new_screen_height);
-    //active_window->scrollToCursor();
 }
 
 void Editor::refreshScreen()
 {
-    if (!active_window) {
-	active_window = createNewWindow(screen_width, screen_height);
-	root_tree = Leaf{
-	    FONT_CHAR_WIDTH * FONT_SCALE,
-	    FONT_CHAR_HEIGHT * FONT_SCALE,
-	    active_window
-	};
-    }
     std::visit(RenderVisitor{font}, root_tree);
 }
 
@@ -335,7 +233,7 @@ void charCallback(GLFWwindow* window, unsigned int codepoint)
 {
     (void)window;
     if (codepoint >= 32 && codepoint <= 126) {
-        Editor::getInstance().insertCharOnActiveWindow(static_cast<char>(codepoint));
+        Editor::getInstance().getActiveWindow()->insertChar(static_cast<char>(codepoint));
     }
 }
 
@@ -346,12 +244,12 @@ void customWindowSizeCallback(GLFWwindow* window, int new_width, int new_height)
     Editor::getInstance().onResize(new_width, new_height);
 }
 
-// TODO: adjust screen on run time
-// TODO: render visible line to distinguish window bounds on splitted screen
+// TODO: [DONE] adjust screen on run time
+// TODO: [DONE] render visible line to distinguish window bounds on splitted screen
 // TODO: implement close active window
-// TODO: switch between opened windows
+// TODO: [IN PROGRESS] switch between opened windows
 
-int main(int argc, char *argv[])
+int main()
 {
     InitWindow(DEFAULT_SCREEN_WIDTH, DEFAULT_SCREEN_HEIGHT, "");
     

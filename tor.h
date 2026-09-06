@@ -6,8 +6,6 @@
 #include <iostream>
 
 #include <string_view>
-#include <ranges>
-#include <algorithm>
 
 #define GRAPHICS_API_OPENGL_33
 #include "GLFW/glfw3.h"
@@ -81,15 +79,7 @@ public:
     }    
 
     void handleKeyAction(KeyInputTag key);
-    void insertCharOnActiveWindow(char c);
-    void moveCursorLeft();
-    void moveCursorRight();
-    void moveCursorUp();
-    void moveCursorDown();
-
     void backspaceOnCursor();
-    void newlineOnCursor();
-    void scrollToCursor(const Cursor& cur, ViewPort& vp);
    
     void splitActiveWindow(SplitType sp);
     void onResize(int new_window_width, int new_window_height);
