@@ -20,7 +20,6 @@ public:
     void eraseCharAt(std::size_t cursor_line, std::size_t cursor_col);
     void appendLineTo(std::size_t target_line, std::size_t source_line);
     void splitLineAt(std::size_t cursor_line, std::size_t cursor_col);
-
     
     Text& getText() { return text; }
 

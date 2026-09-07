@@ -1,41 +1,37 @@
 #include "cursor.h"
 
-void Cursor::setDrawType(CursorDrawType new_draw_type)
-{
-    draw_type = new_draw_type;
-}
-
 void Cursor::setPosition(std::size_t new_line, std::size_t new_col)
 {
-    line_idx = new_line;
-    col_idx  = new_col;
+    line = new_line;
+    col  = new_col;
 }
+
 void Cursor::setLine(std::size_t new_line)
 {
-    line_idx = new_line;
+    line = new_line;
 }
 
 void Cursor::setCol(std::size_t new_col)
 {
-    col_idx = new_col;
+    col = new_col;
 }
 
 void Cursor::advanceCol()
 {
-    ++col_idx;
+    ++col;
 }
 
 void Cursor::retreatCol()
 {
-    --col_idx;
+    --col;
 }
 
 void Cursor::advanceLine()
 {
-    ++line_idx;
+    ++line;
 }
 
 void Cursor::retreatLine()
 {
-    --line_idx;
+    --line;
 }

@@ -49,6 +49,11 @@ public:
     void drawChar(const Font& font, char c, int char_width, int char_height, Vec2f pos, Color color);    
     void draw(const Font& font, int char_width, int char_height) override;
 
+    CursorDrawType getCursorDrawType() { return cursor->getDrawType(); }
+    std::size_t getCursorLine() { return cursor->getLine(); }
+    std::size_t getCursorCol() { return cursor->getCol(); }
+    Text& getBufferText() { return buffer->getText(); }
+
 private:
     Rectangle *window_rect;
     ViewPort *view_port;
@@ -103,10 +108,14 @@ public:
 
     Rectangle& getRect()    { return rect; }
     ViewPort& getViewPort() { return view_port; }
-    Cursor& getCursor()     { return cursor; }
-    
+    Cursor& getCursor()     { return cursor; }    
     Buffer& getBuffer() const { return *buffer; }
     std::shared_ptr<Buffer> getBufferShared() const { return buffer; }
+
+    std::size_t getCursorLine() { return getCursor().getLine(); }
+    std::size_t getCursorCol() { return getCursor().getCol(); }
+    Text& getBufferText() { return getBuffer().getText(); }
+    
 
  private:
     std::vector<std::shared_ptr<Graphic>> graphics;
@@ -182,8 +191,8 @@ struct SplitVisitor
 		    leaf.window->getViewPort(),
 		    Cursor{
 			CursorDrawType::Hollow,
-			leaf.window->getCursor().getLine(),
-			leaf.window->getCursor().getCol()
+			leaf.window->getCursorLine(),
+			leaf.window->getCursorCol()
 		    },
 		    leaf.window->getBufferShared()
 		);
@@ -212,8 +221,8 @@ struct SplitVisitor
 		    leaf.window->getViewPort(),
 		    Cursor{
 			CursorDrawType::Hollow,
-			leaf.window->getCursor().getLine(),
-			leaf.window->getCursor().getCol()
+			leaf.window->getCursorLine(),
+			leaf.window->getCursorCol()
 		    },
 		    leaf.window->getBufferShared()
                 );
@@ -325,11 +334,11 @@ struct CursorVisitor
 
     void operator()(Leaf& leaf)
     {
-	if (leaf.window->getCursor().getLine() > active_window_cursor_line) {
+	if (leaf.window->getCursorLine() > active_window_cursor_line) {
 	    leaf.window->getCursor().setPosition(active_window_cursor_line,
 						 active_window_cursor_col);
-	} else if (leaf.window->getCursor().getLine() == active_window_cursor_line &&
-		   leaf.window->getCursor().getCol() > active_window_cursor_col) {
+	} else if (leaf.window->getCursorLine() == active_window_cursor_line &&
+		   leaf.window->getCursorCol() > active_window_cursor_col) {
 	    leaf.window->getCursor().setCol(active_window_cursor_col);
 	}
 	
