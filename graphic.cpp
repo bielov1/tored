@@ -146,7 +146,7 @@ void Window::backspaceOnCursor(LayoutTree& root_tree)
 	getBuffer().removeLine(getCursorLine());
 	getCursor().setPosition(getCursorLine() - 1, prev_line_size);
     }
-    recalculateCursor(root_tree, getCursorLine(), getCursorCol());
+    recalculateCursor(root_tree, getCursorOffset(), getCursorOffset() - 1);
 }
 
 void Window::newlineOnCursor()
@@ -154,6 +154,7 @@ void Window::newlineOnCursor()
     getBuffer().splitLineAt(getCursorLine(), getCursorCol());
     getCursor().setPosition(getCursorLine() + 1, 0);
     scrollToCursor();
+    recalculateCursor(root_tree, getCursorLine(), getCursorCol());
 }
 
 void Window::insertChar(char c)
@@ -191,6 +192,6 @@ void Window::recalcViewPort(int char_width, int char_height)
 
 void Window::attachBufferView()
 {
-    auto view = std::make_shared<BufferView>(&rect, &view_port, &cursor, buffer.get());
+    auto view = std::make_shared<BufferView>(&rect, &view_port, &cursor, piece_table.get());
     add(view);
 }

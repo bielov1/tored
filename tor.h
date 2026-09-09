@@ -44,6 +44,7 @@ enum class KeyInputTag : int
     KIT_F1,
     KIT_F2,
     KIT_F3,
+    KIT_F4,
     KIT_F5,
     __static_key_input_tag_count
 };
@@ -111,33 +112,3 @@ private:
     int screen_height;
     Font font;
 };
-
-static std::shared_ptr<Window> createNewWindow(int window_width, int window_height)
-{
-    Rectangle new_rect = {
-	.x = 0.0f,
-	.y = 0.0f,
-	.width = static_cast<float>(window_width),
-	.height = static_cast<float>(window_height)
-    };
-    
-    ViewPort new_view_port = {
-	.first_visible_line = 0,
-	.first_visible_col  = 0,
-	.visible_lines = static_cast<std::size_t>(window_height / (FONT_CHAR_HEIGHT * FONT_SCALE)),
-	.visible_cols  = static_cast<std::size_t>(window_width / (FONT_CHAR_WIDTH * FONT_SCALE))
-    };
-    
-    Cursor new_cursor{CursorDrawType::Filled, 0, 0};
-    auto new_buffer = std::make_shared<Buffer>();
-    
-    auto new_window = std::make_shared<Window>(
-        new_rect,
-        new_view_port,
-        new_cursor,
-	std::move(new_buffer)
-    );
-
-    new_window->attachBufferView();
-    return new_window;
-}

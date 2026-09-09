@@ -2,36 +2,51 @@
 
 void Cursor::setPosition(std::size_t new_line, std::size_t new_col)
 {
-    line = new_line;
-    col  = new_col;
+    pos.line = new_line;
+    pos.col  = new_col;
 }
 
 void Cursor::setLine(std::size_t new_line)
 {
-    line = new_line;
+    pos.line = new_line;
 }
 
 void Cursor::setCol(std::size_t new_col)
 {
-    col = new_col;
+    pos.col = new_col;
 }
 
-void Cursor::advanceCol()
+void setOffset(std::size_t new_offset)
 {
-    ++col;
-}
-
-void Cursor::retreatCol()
-{
-    --col;
+    offset.byte_offset = new_offset;
 }
 
 void Cursor::advanceLine()
 {
-    ++line;
+    ++pos.line;
+}
+
+void Cursor::advanceCol()
+{
+    ++pos.col;
+}
+
+void Cursor::advanceOffset()
+{
+    ++offset.byte_offset;
 }
 
 void Cursor::retreatLine()
 {
-    --line;
+    --pos.line;
+}
+
+void Cursor::retreatCol()
+{
+    --pos.col;
+}
+
+void Cursor::retreatOffset()
+{
+    --offset.byte_offset;
 }

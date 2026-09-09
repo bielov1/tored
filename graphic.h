@@ -9,7 +9,7 @@
 
 #include "raylib.h"
 #include "rlgl.h"
-#include "buffer.h"
+#include "piece_table.h"
 #include "cursor.h"
 #include "la.h"
 
@@ -39,11 +39,11 @@ public:
     BufferView(Rectangle *r,
 	       ViewPort *vp,
 	       Cursor *c,
-	       Buffer *b)
+	       PieceTable *pt)
         : window_rect( r )
 	, view_port( vp )
 	, cursor( c )
-	, buffer( b )
+	, piece_table( pt )
     {}
     
     void drawChar(const Font& font, char c, int char_width, int char_height, Vec2f pos, Color color);    
@@ -52,13 +52,12 @@ public:
     CursorDrawType getCursorDrawType() { return cursor->getDrawType(); }
     std::size_t getCursorLine() { return cursor->getLine(); }
     std::size_t getCursorCol() { return cursor->getCol(); }
-    Text& getBufferText() { return buffer->getText(); }
 
 private:
     Rectangle *window_rect;
     ViewPort *view_port;
     Cursor *cursor;
-    Buffer *buffer;
+    PieceTable *piece_table;
 };
 struct Leaf;
 struct Node;
@@ -73,11 +72,11 @@ public:
     Window(Rectangle r,
 	   ViewPort vp,
 	   Cursor c,
-	   std::shared_ptr<Buffer> b)
+	   std::shared_ptr<PieceTable> pt)
         : rect{ r }
 	, view_port{ vp }
         , cursor{ c }
-	, buffer{ std::move(b) }
+	, piece_table{ std::move(b) }
     {}
     
     ~Window() override = default;
@@ -112,19 +111,59 @@ public:
     Buffer& getBuffer() const { return *buffer; }
     std::shared_ptr<Buffer> getBufferShared() const { return buffer; }
 
+    CursorDrawType getCursorDrawType() { getCursor().getDrawType(); }
     std::size_t getCursorLine() { return getCursor().getLine(); }
     std::size_t getCursorCol() { return getCursor().getCol(); }
+    std::size_t getCursorOffset() { return getCursor().getOffset(); }
     Text& getBufferText() { return getBuffer().getText(); }
     
-
  private:
     std::vector<std::shared_ptr<Graphic>> graphics;
 
     Rectangle rect;
     ViewPort view_port;
     Cursor cursor;
-    std::shared_ptr<Buffer> buffer;
+    std::shared_ptr<PieceTable> piece_table;
 };
+
+static std::shared_ptr<Window> createNewWindow(int window_width, int window_height)
+{
+    Rectangle new_rect = {
+	.x = 0.0f,
+	.y = 0.0f,
+	.width = static_cast<float>(window_width),
+	.height = static_cast<float>(window_height)
+    };
+    
+    ViewPort new_view_port = {
+	.first_visible_line = 0,
+	.first_visible_col  = 0,
+	.visible_lines = static_cast<std::size_t>(window_height / (FONT_CHAR_HEIGHT * FONT_SCALE)),
+	.visible_cols  = static_cast<std::size_t>(window_width / (FONT_CHAR_WIDTH * FONT_SCALE))
+    };
+    
+    Cursor new_cursor{
+	CursorDrawType::Filled,
+	BufferPosition {
+	    .line = 0;
+	    .col = 0;
+	},
+	BufferOffset {
+	    .byte_offset = 0;
+	}
+    };
+    auto new_piece_table = ptCreate("Hello World!");
+    
+    auto new_window = std::make_shared<Window>(
+        new_rect,
+        new_view_port,
+        new_cursor,
+	std::move(new_piece_table)
+    );
+
+    new_window->attachBufferView();
+    return new_window;
+}
 
 // ============================================================================
 
@@ -329,20 +368,41 @@ struct LayoutVisitor
 
 struct CursorVisitor
 {
-    std::size_t active_window_cursor_line;
-    std::size_t active_window_cursor_col;
+    std::size_t active_window_offset;
+    std::size_t active_window_old_offset;
 
     void operator()(Leaf& leaf)
     {
-	if (leaf.window->getCursorLine() > active_window_cursor_line) {
-	    leaf.window->getCursor().setPosition(active_window_cursor_line,
-						 active_window_cursor_col);
-	} else if (leaf.window->getCursorLine() == active_window_cursor_line &&
-		   leaf.window->getCursorCol() > active_window_cursor_col) {
-	    leaf.window->getCursor().setCol(active_window_cursor_col);
-	}
+	if (leaf.window->getBufferText().empty()) return;
 	
-	leaf.window->scrollToCursor();
+	auto& peer_window = leaf.window;
+	if (active_window_offset < peer_window->getCursorOffset()) {
+	    if (active_window_old_offset < active_window_offset) {
+		// char was added
+		peer_window->getCursor().advanceOffset();
+	    } else {
+		// char was removed
+		peer_window->getCursor().retreatOffset();
+	    }
+	    
+	    // const Text& buffer = peer_window->getBufferText();
+	    // auto it = std::ranges::upper_bound(
+	    //     buffer.begin(),
+	    //     buffer.end(),
+	    //     target_offset,
+	    //     [](std::size_t offset_val, const Line& line) {
+	    //         return offset_val < line.first;
+	    //     }
+	    // );
+	    // std::size_t line = 0;
+	    // if (it != buffer.begin()) {
+	    //     line = std::distance(buffer.begin(), it) - 1;
+	    // }
+    
+	    // std::size_t line_start_offset = buffer[line_idx].first;
+	    // std::size_t col_idx = target_offset - line_start_offset;
+	}
+	peer_window->scrollToCursor();
     }
 
     void operator()(std::unique_ptr<Node>& node)
@@ -365,8 +425,8 @@ inline void recalculateLayout(LayoutTree& tree, int new_screen_width, int new_sc
     std::visit(LayoutVisitor{ screen_bounds }, tree);
 }
 
-inline void recalculateCursor(LayoutTree& tree, std::size_t active_window_cursor_line, std::size_t active_window_cursor_col)
+inline void recalculateCursor(LayoutTree& tree, std::size_t active_window_offset, std::size_t active_window_old_offset)
 {
-    std::visit(CursorVisitor{ active_window_cursor_line, active_window_cursor_col }, tree);
+    std::visit(CursorVisitor{ active_window_offset, active_window_old_offset }, tree);
 }
 // ============================================================================

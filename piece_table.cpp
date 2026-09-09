@@ -1,4 +1,39 @@
-#include "buffer.h"
+#include "piece_table.h"
+
+PieceTable::PieceTable(const std::string& text_buffer)
+    : original_buffer{text_buffer}
+    , add_buffer{""}
+    , pieces{}
+{
+    pieces.emplace(0, createPiece(0, static_cast<int>(text_buffer.length()), ORIGINAL))
+}
+
+PieceTable::~PieceTable() = default;
+
+void PieceTable::insert(std::size_t cursor_offset, const std::string& text)
+{
+    std::size_t add_buffer_offset = add_buffer.size();
+    add_buffer += text;
+
+    auto [piece, offset_within_piece] = findPieceAt(cursor_offset);
+
+    
+}
+
+static Piece PieceTable::createPiece(const std::size_t start_index, std::size_t len, Source source_type)
+{
+    Piece new_piece{
+	.source = source_type,
+	.offset = start_index,
+	.length = len
+    };
+    return newpiece;
+}
+
+auto PieceTable::findPieceAt(std::size_t offset)
+{
+
+}
 
 void Buffer::insertLine(std::string line)
 {
@@ -15,7 +50,8 @@ void Buffer::removeLine(std::size_t cursor_line)
 void Buffer::insertCharAt(std::size_t cursor_line, std::size_t cursor_col, char c)
 {
     if (cursor_line >= getText().size()) {
-	getText().emplace_back(1, std::string(1, c));
+	std::size_t offset = 0;
+	getText().emplace_back(offset, std::string(1, c));
         return;
     }
 

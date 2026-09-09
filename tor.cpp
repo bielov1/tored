@@ -30,7 +30,7 @@ Editor::~Editor()
 
 void Editor::handleKeyAction(KeyInputTag key)
 {
-    static_assert(KeyInputTag::__static_key_input_tag_count == 10);
+    static_assert(KeyInputTag::__static_key_input_tag_count == 11);
     if (!active_window) throw "active_window always assumed to be valid\n";
     switch (key) {
     case KeyInputTag::KIT_BACKSPACE:
@@ -59,6 +59,9 @@ void Editor::handleKeyAction(KeyInputTag key)
 	break;
     case KeyInputTag::KIT_F3:
 	splitActiveWindow(SplitType::Vertical);
+	break;
+    case KeyInputTag::KIT_F4:
+	closeAndSwitchActiveWindow();
 	break;
     // case GLFW_KEY_F5:
     // 	std::fprintf(stdout, "F5 was pressed\n");
@@ -90,7 +93,12 @@ void Editor::refreshScreen()
 
 void Editor::closeAndSwitchActiveWindow()
 {
-    assert(false && "closeAndSwitchActiveWindow() is not implemented yet\n");
+    // TODO
+    assert(false);
+    if (auto result = std::ranges::find(window_list, active_window) != window_list.end()) {
+	window_list.remove(active_window);
+    }
+    
 }
 
 void Editor::switchActiveWindow()
@@ -212,7 +220,7 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
     (void)window;
     (void)scancode;
     (void)mods;
-    static_assert(KeyInputTag::__static_key_input_tag_count == 10);
+    static_assert(KeyInputTag::__static_key_input_tag_count == 11);
     if (key == GLFW_KEY_BACKSPACE && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
 	Editor::getInstance().handleKeyAction(KeyInputTag::KIT_BACKSPACE);
     }
@@ -239,6 +247,9 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
     }
     if (key == GLFW_KEY_F3 && action == GLFW_PRESS) {
         Editor::getInstance().handleKeyAction(KeyInputTag::KIT_F3);
+    }
+    if (key == GLFW_KEY_F4 && action == GLFW_PRESS) {
+        Editor::getInstance().handleKeyAction(KeyInputTag::KIT_F4);
     }
     if (key == GLFW_KEY_F5 && action == GLFW_PRESS) {
         Editor::getInstance().handleKeyAction(KeyInputTag::KIT_F5);
