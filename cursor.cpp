@@ -16,7 +16,7 @@ void Cursor::setCol(std::size_t new_col)
     pos.col = new_col;
 }
 
-void setOffset(std::size_t new_offset)
+void Cursor::setOffset(std::size_t new_offset)
 {
     offset.byte_offset = new_offset;
 }

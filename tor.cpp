@@ -14,7 +14,9 @@ Editor::Editor()
     auto font_data = reinterpret_cast<const unsigned char*>(_binary_charmap_oldschool_white_png_start);
     font = loadPNGDataAsFont({font_data, font_size}, FONT_COLS, FONT_ROWS);
     
-    active_window = createNewWindow(screen_width, screen_height);
+    active_window = createNewWindow(screen_width, screen_height,
+				    FONT_CHAR_HEIGHT, FONT_CHAR_WIDTH,
+				    FONT_SCALE);
     window_list.push_back(active_window);
     root_tree = Leaf{
 	FONT_CHAR_WIDTH * FONT_SCALE,
@@ -261,7 +263,8 @@ void charCallback(GLFWwindow* window, unsigned int codepoint)
 {
     (void)window;
     if (codepoint >= 32 && codepoint <= 126) {
-        Editor::getInstance().getActiveWindow()->insertChar(static_cast<char>(codepoint));
+	char c = static_cast<char>(codepoint);
+        Editor::getInstance().getActiveWindow()->insertText(0, std::string(1, c));
     }
 }
 

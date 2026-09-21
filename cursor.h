@@ -48,6 +48,7 @@ public:
     std::size_t getLine() const { return pos.line; }
     std::size_t getCol() const { return pos.col; }
     std::size_t getOffset() const { return offset.byte_offset; }
+
     
 private:
     CursorDrawType draw_type;

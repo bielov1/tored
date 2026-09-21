@@ -1,25 +1,58 @@
 #pragma once
 
-#include <print>
-#include <set>
 #include <string>
+#include <algorithm>
+#include <set>
+#include <functional>
+#include <ranges>
 
-class PieceTable
+#include "btree.h"
+
+struct Data;
+class IBuffer
 {
 public:
-    enum Source { ORIGINAL, ADD };
-    struct Piece
-    {
-	Source source;
-	std::size_t offset;
-	std::size_t length;
-    };
+    IBuffer() = default;
+    virtual ~IBuffer() = default;
+    virtual void insert(std::size_t offset, const std::string& text) = 0;
+    virtual void remove(std::size_t offset, std::size_t length) = 0;
+    virtual char getCharAt(std::size_t offset) = 0;
+    virtual std::vector<std::string_view> getLine(std::size_t line_idx) = 0;
+    virtual std::vector<std::string_view> getLastLine() = 0;
+    virtual std::size_t getLineCount() = 0;
+    virtual std::size_t getLength() = 0;
+    virtual bool empty() = 0;
+};
 
+enum class SourceType { ORIGINAL, ADD };
+struct Piece
+{
+    SourceType source;
+    std::size_t offset;
+    std::size_t length;
+};
+
+struct Data
+{
+    std::size_t key;
+    Piece piece;
+};
+
+
+class PieceTable : public IBuffer
+{
+public:    
     PieceTable(const std::string& text_buffer = "");
-    ~PieceTable();
+    ~PieceTable() = default;
 
-    std::string& getText();
-    void insert(std::size_t offset, const std::string& text);
+    void insert(std::size_t offset, const std::string& text) override final;
+    void remove(std::size_t offset, std::size_t length) override final;
+    char getCharAt(std::size_t offset) override final;
+    std::vector<std::string_view> getLine(std::size_t line_idx) override final;
+    std::vector<std::string_view> getLastLine() override final;
+    std::size_t getLineCount() override final;
+    std::size_t getLength() override final;
+    bool empty() override final;
     
     // void insertLine(std::string line);
     // void removeLine(std::size_t cursor_line);
@@ -29,14 +62,39 @@ public:
     // void splitLineAt(std::size_t cursor_line, std::size_t cursor_col);
     
 private:
-    static Piece createPiece(const std::size_t offset, std::size_t length, Source source_type);
-    auto findPieceAt(std::size_t offset);
-    std::string original_buffer;
-    std::string add_buffer;
-    std::map<std::size_t, Piece> piece_sequence;
+    void init(const std::string& text_buffer);
+    void replace(std::size_t piece_with_key,
+		 std::vector<std::unique_ptr<Data>> with_elems,
+		 std::size_t delta);
+    void replaceRange(const std::vector<const Data*>& affected,
+		      std::vector<std::unique_ptr<Data>> with_elems,
+		      std::size_t range_start,
+		      std::size_t delta);
+    std::vector<std::size_t> findNewlineOffsets(std::string_view text);
+    void updateLineStartsOnInsert(std::size_t insert_offset, std::string_view inserted_text);
+    void updateLineStartsOnRemove(std::size_t remove_offset, std::size_t remove_length);
+    std::pair<const Piece, std::size_t> findPieceAt(std::size_t cur_offset);
+    std::vector<const Data*> findPiecesInRange(std::size_t left_bound,
+					       std::size_t right_bound);
+    std::size_t pieceStart(const Data& d) const { return d.key; }
+    std::size_t pieceEnd(const Data& d) const { return d.key + d.piece.length; }
+    
+    static constexpr std::size_t M = 4;
+    std::string original_buf;
+    std::string add_buf;
+    
+    using LineIdx = std::size_t;
+    using BufferOffset = std::size_t;
+    std::unordered_map<LineIdx, BufferOffset> line_starts;
+    btree::BTree<Data, M> pieces;
 };
 
-std::shared_ptr<PieceTable> ptCreate(std::string text)
+static Piece makePiece(SourceType type, std::size_t offset, std::size_t len)
 {
-    
+    Piece piece = {
+	.source = type,
+	.offset = offset,
+	.length = len
+    };
+    return piece;
 }

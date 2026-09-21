@@ -76,7 +76,7 @@ class Editor
 public:
     static Editor& getInstance()
     {
-	static Editor editor;
+	static Editor editor{};
 	return editor;
     }    
 

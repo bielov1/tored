@@ -15,14 +15,6 @@
 
 // ============================================================================
 
-struct ViewPort
-{
-    std::size_t first_visible_line;
-    std::size_t first_visible_col;
-    std::size_t visible_lines;
-    std::size_t visible_cols;
-};
-
 class Graphic
 {
 public:
@@ -33,32 +25,40 @@ public:
     //virtual remove(std::shared_ptr<Graphic> component) {}
 };
 
+struct ViewPort
+{
+    std::size_t first_visible_line;
+    std::size_t first_visible_col;
+    std::size_t visible_lines;
+    std::size_t visible_cols;
+};
+
 class BufferView : public Graphic
 {
 public:
     BufferView(Rectangle *r,
 	       ViewPort *vp,
 	       Cursor *c,
-	       PieceTable *pt)
+	       IBuffer *b)
         : window_rect( r )
 	, view_port( vp )
 	, cursor( c )
-	, piece_table( pt )
+	, buffer( b )
     {}
-    
-    void drawChar(const Font& font, char c, int char_width, int char_height, Vec2f pos, Color color);    
-    void draw(const Font& font, int char_width, int char_height) override;
 
-    CursorDrawType getCursorDrawType() { return cursor->getDrawType(); }
-    std::size_t getCursorLine() { return cursor->getLine(); }
-    std::size_t getCursorCol() { return cursor->getCol(); }
+    void renderTextSlice(std::string_view slice, const Font& font, Vec2f& draw_pos, int char_width, int char_height);
+    void draw(const Font& font, int char_width, int char_height) override;
+    // CursorDrawType getCursorDrawType() { return cursor->getDrawType(); }
+    // std::size_t getCursorLine() { return cursor->getLine(); }
+    // std::size_t getCursorCol() { return cursor->getCol(); }
 
 private:
     Rectangle *window_rect;
     ViewPort *view_port;
     Cursor *cursor;
-    PieceTable *piece_table;
+    IBuffer *buffer;
 };
+
 struct Leaf;
 struct Node;
 using LayoutTree = std::variant<
@@ -72,11 +72,11 @@ public:
     Window(Rectangle r,
 	   ViewPort vp,
 	   Cursor c,
-	   std::shared_ptr<PieceTable> pt)
+	   std::shared_ptr<IBuffer> b)
         : rect{ r }
 	, view_port{ vp }
         , cursor{ c }
-	, piece_table{ std::move(b) }
+	, buffer{ std::move(b) }
     {}
     
     ~Window() override = default;
@@ -98,24 +98,22 @@ public:
     void moveCursorDown();
     void backspaceOnCursor(LayoutTree& root_tree);
     void newlineOnCursor();
-    void insertChar(char c);
+    void insertText(std::size_t cursor_offset, const std::string& text);
     void scrollToCursor();
     
     void recalcViewPort(int char_width, int char_heigth);
     void attachBufferView();
     void setRect(const Rectangle& new_rect) { rect = new_rect; }
 
-    Rectangle& getRect()    { return rect; }
+    Rectangle& getRect() { return rect; }
     ViewPort& getViewPort() { return view_port; }
-    Cursor& getCursor()     { return cursor; }    
-    Buffer& getBuffer() const { return *buffer; }
-    std::shared_ptr<Buffer> getBufferShared() const { return buffer; }
-
-    CursorDrawType getCursorDrawType() { getCursor().getDrawType(); }
-    std::size_t getCursorLine() { return getCursor().getLine(); }
-    std::size_t getCursorCol() { return getCursor().getCol(); }
-    std::size_t getCursorOffset() { return getCursor().getOffset(); }
-    Text& getBufferText() { return getBuffer().getText(); }
+    Cursor& getCursor() { return cursor; }
+    IBuffer& getBuffer() { return *(buffer.get()); }
+    std::shared_ptr<IBuffer> getBufferShared() const { return buffer; }
+    CursorDrawType getCursorDrawType() { return cursor.getDrawType(); }
+    std::size_t getCursorLine() { return cursor.getLine(); }
+    std::size_t getCursorCol() { return cursor.getCol(); }
+    std::size_t getCursorOffset() { return cursor.getOffset(); }
     
  private:
     std::vector<std::shared_ptr<Graphic>> graphics;
@@ -123,44 +121,49 @@ public:
     Rectangle rect;
     ViewPort view_port;
     Cursor cursor;
-    std::shared_ptr<PieceTable> piece_table;
+    std::shared_ptr<IBuffer> buffer;
 };
 
-static std::shared_ptr<Window> createNewWindow(int window_width, int window_height)
+static std::shared_ptr<Window> createNewWindow(int window_width, int window_height,
+					       int char_height, int char_width,
+					       int scale)
 {
-    Rectangle new_rect = {
+    Rectangle window_rect = {
 	.x = 0.0f,
 	.y = 0.0f,
 	.width = static_cast<float>(window_width),
 	.height = static_cast<float>(window_height)
     };
     
-    ViewPort new_view_port = {
+    ViewPort view_port = {
 	.first_visible_line = 0,
 	.first_visible_col  = 0,
-	.visible_lines = static_cast<std::size_t>(window_height / (FONT_CHAR_HEIGHT * FONT_SCALE)),
-	.visible_cols  = static_cast<std::size_t>(window_width / (FONT_CHAR_WIDTH * FONT_SCALE))
+	.visible_lines = static_cast<std::size_t>(window_height / (char_height * scale)),
+	.visible_cols  = static_cast<std::size_t>(window_width / (char_width * scale))
     };
     
-    Cursor new_cursor{
+    Cursor cursor{
 	CursorDrawType::Filled,
 	BufferPosition {
-	    .line = 0;
-	    .col = 0;
+	    .line = 0,
+	    .col = 0
 	},
 	BufferOffset {
-	    .byte_offset = 0;
+	    .byte_offset = 0
 	}
     };
-    auto new_piece_table = ptCreate("Hello World!");
-    
+
     auto new_window = std::make_shared<Window>(
-        new_rect,
-        new_view_port,
-        new_cursor,
-	std::move(new_piece_table)
+        window_rect,
+        view_port,
+        cursor,
+	std::make_shared<PieceTable>("Hello World!\n")
     );
 
+    // new_window->insertText(13, "TESTTEST");
+    // new_window->insertText(21, "More TESTS");
+    new_window->insertText(0, "Hello Cruel World!\n");
+    new_window->insertText(6, "Hello Happy World!");
     new_window->attachBufferView();
     return new_window;
 }
@@ -230,8 +233,13 @@ struct SplitVisitor
 		    leaf.window->getViewPort(),
 		    Cursor{
 			CursorDrawType::Hollow,
-			leaf.window->getCursorLine(),
-			leaf.window->getCursorCol()
+			BufferPosition {
+			    leaf.window->getCursorLine(),
+			    leaf.window->getCursorCol()
+			},
+			BufferOffset {
+			    leaf.window->getCursorOffset()
+			}
 		    },
 		    leaf.window->getBufferShared()
 		);
@@ -260,8 +268,13 @@ struct SplitVisitor
 		    leaf.window->getViewPort(),
 		    Cursor{
 			CursorDrawType::Hollow,
-			leaf.window->getCursorLine(),
-			leaf.window->getCursorCol()
+			BufferPosition {
+			    leaf.window->getCursorLine(),
+			    leaf.window->getCursorCol()
+			},
+			BufferOffset {
+			    leaf.window->getCursorOffset()
+			}
 		    },
 		    leaf.window->getBufferShared()
                 );
@@ -366,53 +379,53 @@ struct LayoutVisitor
     }
 };
 
-struct CursorVisitor
-{
-    std::size_t active_window_offset;
-    std::size_t active_window_old_offset;
+// struct CursorVisitor
+// {
+//     std::size_t active_window_offset;
+//     std::size_t active_window_old_offset;
 
-    void operator()(Leaf& leaf)
-    {
-	if (leaf.window->getBufferText().empty()) return;
+//     void operator()(Leaf& leaf)
+//     {
+// 	if (leaf.window->getBufferText().empty()) return;
 	
-	auto& peer_window = leaf.window;
-	if (active_window_offset < peer_window->getCursorOffset()) {
-	    if (active_window_old_offset < active_window_offset) {
-		// char was added
-		peer_window->getCursor().advanceOffset();
-	    } else {
-		// char was removed
-		peer_window->getCursor().retreatOffset();
-	    }
+// 	auto& peer_window = leaf.window;
+// 	if (active_window_offset < peer_window->getCursorOffset()) {
+// 	    if (active_window_old_offset < active_window_offset) {
+// 		// char was added
+// 		peer_window->getCursor().advanceOffset();
+// 	    } else {
+// 		// char was removed
+// 		peer_window->getCursor().retreatOffset();
+// 	    }
 	    
-	    // const Text& buffer = peer_window->getBufferText();
-	    // auto it = std::ranges::upper_bound(
-	    //     buffer.begin(),
-	    //     buffer.end(),
-	    //     target_offset,
-	    //     [](std::size_t offset_val, const Line& line) {
-	    //         return offset_val < line.first;
-	    //     }
-	    // );
-	    // std::size_t line = 0;
-	    // if (it != buffer.begin()) {
-	    //     line = std::distance(buffer.begin(), it) - 1;
-	    // }
+// 	    // const Text& buffer = peer_window->getBufferText();
+// 	    // auto it = std::ranges::upper_bound(
+// 	    //     buffer.begin(),
+// 	    //     buffer.end(),
+// 	    //     target_offset,
+// 	    //     [](std::size_t offset_val, const Line& line) {
+// 	    //         return offset_val < line.first;
+// 	    //     }
+// 	    // );
+// 	    // std::size_t line = 0;
+// 	    // if (it != buffer.begin()) {
+// 	    //     line = std::distance(buffer.begin(), it) - 1;
+// 	    // }
     
-	    // std::size_t line_start_offset = buffer[line_idx].first;
-	    // std::size_t col_idx = target_offset - line_start_offset;
-	}
-	peer_window->scrollToCursor();
-    }
+// 	    // std::size_t line_start_offset = buffer[line_idx].first;
+// 	    // std::size_t col_idx = target_offset - line_start_offset;
+// 	}
+// 	peer_window->scrollToCursor();
+//     }
 
-    void operator()(std::unique_ptr<Node>& node)
-    {
-	if (!node) return;
+//     void operator()(std::unique_ptr<Node>& node)
+//     {
+// 	if (!node) return;
 
-	std::visit(*this, node->left);
-	std::visit(*this, node->right);
-    }
-};
+// 	std::visit(*this, node->left);
+// 	std::visit(*this, node->right);
+//     }
+// };
 
 inline void recalculateLayout(LayoutTree& tree, int new_screen_width, int new_screen_height)
 {
@@ -425,8 +438,8 @@ inline void recalculateLayout(LayoutTree& tree, int new_screen_width, int new_sc
     std::visit(LayoutVisitor{ screen_bounds }, tree);
 }
 
-inline void recalculateCursor(LayoutTree& tree, std::size_t active_window_offset, std::size_t active_window_old_offset)
-{
-    std::visit(CursorVisitor{ active_window_offset, active_window_old_offset }, tree);
-}
+// inline void recalculateCursor(LayoutTree& tree, std::size_t active_window_offset, std::size_t active_window_old_offset)
+// {
+//     std::visit(CursorVisitor{ active_window_offset, active_window_old_offset }, tree);
+// }
 // ============================================================================
