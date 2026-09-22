@@ -34,51 +34,15 @@ void Editor::handleKeyAction(KeyInputTag key)
 {
     static_assert(KeyInputTag::__static_key_input_tag_count == 11);
     if (!active_window) throw "active_window always assumed to be valid\n";
-    switch (key) {
-    case KeyInputTag::KIT_BACKSPACE:
-	backspace();
-	break;
-    case KeyInputTag::KIT_ENTER:
-	active_window->newlineOnCursor();
-	break;
-    case KeyInputTag::KIT_LEFT:
-	active_window->moveCursorLeft();
-	break;
-    case KeyInputTag::KIT_RIGHT:
-	active_window->moveCursorRight();
-	break;
-    case KeyInputTag::KIT_UP:
-	active_window->moveCursorUp();
-	break;
-    case KeyInputTag::KIT_DOWN:
-	active_window->moveCursorDown();
-	break;
-    case KeyInputTag::KIT_F1:
-	switchActiveWindow();
-	break;    
-    case KeyInputTag::KIT_F2:
-	splitActiveWindow(SplitType::Horizontal);
-	break;
-    case KeyInputTag::KIT_F3:
-	splitActiveWindow(SplitType::Vertical);
-	break;
-    case KeyInputTag::KIT_F4:
-	closeAndSwitchActiveWindow();
-	break;
-    // case GLFW_KEY_F5:
-    // 	std::fprintf(stdout, "F5 was pressed\n");
-    // 	saveToFile(std::string{"output"});
-    // 	break;
-    default:
-	std::fprintf(stderr, "[WARNING] uknown key input\n");
-    }
+
+    active_window->handleNavigationOrActionKey(key);
 }
 
-void Editor::backspace()
-{
-    if (!active_window) throw "backspace() always assumes active_window is valid\n";
-    active_window->backspaceOnCursor(root_tree);
-}
+// void Editor::backspace()
+// {
+//     if (!active_window) throw "backspace() always assumes active_window is valid\n";
+//     active_window->backspaceOnCursor(root_tree);
+// }
 
 void Editor::onResize(int new_screen_width, int new_screen_height)
 {
@@ -91,16 +55,6 @@ void Editor::onResize(int new_screen_width, int new_screen_height)
 void Editor::refreshScreen()
 {
     std::visit(RenderVisitor{font}, root_tree);
-}
-
-void Editor::closeAndSwitchActiveWindow()
-{
-    // TODO
-    assert(false);
-    if (auto result = std::ranges::find(window_list, active_window) != window_list.end()) {
-	window_list.remove(active_window);
-    }
-    
 }
 
 void Editor::switchActiveWindow()
@@ -264,7 +218,7 @@ void charCallback(GLFWwindow* window, unsigned int codepoint)
     (void)window;
     if (codepoint >= 32 && codepoint <= 126) {
 	char c = static_cast<char>(codepoint);
-        Editor::getInstance().getActiveWindow()->insertText(0, std::string(1, c));
+        Editor::getInstance().getActiveWindow()->handleCharInput(c);
     }
 }
 

@@ -9,6 +9,7 @@
 #include "btree.h"
 
 struct Data;
+struct OverlayBuffer;
 class IBuffer
 {
 public:
@@ -17,11 +18,36 @@ public:
     virtual void insert(std::size_t offset, const std::string& text) = 0;
     virtual void remove(std::size_t offset, std::size_t length) = 0;
     virtual char getCharAt(std::size_t offset) = 0;
-    virtual std::vector<std::string_view> getLine(std::size_t line_idx) = 0;
-    virtual std::vector<std::string_view> getLastLine() = 0;
+    virtual std::vector<std::string_view> getLine(std::size_t line_idx, const OverlayBuffer& overlay) = 0;
     virtual std::size_t getLineCount() = 0;
-    virtual std::size_t getLength() = 0;
+    virtual std::size_t getTotalLength() = 0;
     virtual bool empty() = 0;
+};
+
+struct OverlayBuffer
+{
+    std::size_t start_offset{0};
+    std::string text;
+
+    OverlayBuffer(std::size_t offset)
+	: start_offset{ offset }
+	, text{ "" }
+    {}
+
+    bool empty() const { return text.empty(); }
+
+    void append(char c) {
+        text.push_back(c);
+    }
+
+    void append(std::string_view sv) {
+        text.append(sv);
+    }
+
+    void clear() {
+        text.clear();
+        start_offset = 0;
+    }
 };
 
 enum class SourceType { ORIGINAL, ADD };
@@ -38,7 +64,6 @@ struct Data
     Piece piece;
 };
 
-
 class PieceTable : public IBuffer
 {
 public:    
@@ -48,10 +73,9 @@ public:
     void insert(std::size_t offset, const std::string& text) override final;
     void remove(std::size_t offset, std::size_t length) override final;
     char getCharAt(std::size_t offset) override final;
-    std::vector<std::string_view> getLine(std::size_t line_idx) override final;
-    std::vector<std::string_view> getLastLine() override final;
+    std::vector<std::string_view> getLine(std::size_t line_idx, const OverlayBuffer& overlay) override final;
     std::size_t getLineCount() override final;
-    std::size_t getLength() override final;
+    std::size_t getTotalLength() override final;
     bool empty() override final;
     
     // void insertLine(std::string line);

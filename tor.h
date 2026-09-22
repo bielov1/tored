@@ -33,22 +33,6 @@ static const int FONT_CHAR_HEIGHT = (FONT_HEIGHT / FONT_ROWS);
 static constexpr Color FONT_COLOR = WHITE;
 static const size_t BUFFER_CAP = 1024;
 
-enum class KeyInputTag : int
-{
-    KIT_BACKSPACE,
-    KIT_ENTER,
-    KIT_LEFT,
-    KIT_RIGHT,
-    KIT_UP,
-    KIT_DOWN,
-    KIT_F1,
-    KIT_F2,
-    KIT_F3,
-    KIT_F4,
-    KIT_F5,
-    __static_key_input_tag_count
-};
-
 constexpr bool operator==(KeyInputTag kit, int i) {
     return static_cast<std::underlying_type_t<KeyInputTag>>(kit) == i;
 }
@@ -81,10 +65,8 @@ public:
     }    
 
     void handleKeyAction(KeyInputTag key);
-    void backspace();
     void onResize(int new_window_width, int new_window_height);
     void refreshScreen();
-    void closeAndSwitchActiveWindow();
     void switchActiveWindow();
     void splitActiveWindow(SplitType sp);
     void saveToFile(const std::string& file_path);

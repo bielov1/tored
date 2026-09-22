@@ -114,52 +114,58 @@ char PieceTable::getCharAt(std::size_t offset)
     }
 }
 
-std::vector<std::string_view> PieceTable::getLine(std::size_t line_idx)
+std::vector<std::string_view> PieceTable::getLine(std::size_t line_idx,
+						  const OverlayBuffer& overlay)
 {
-    if (line_idx > line_starts.size()) return {};
+    if (line_idx >= line_starts.size()) return {};
     std::vector<std::string_view> views{};
 
-    std::size_t line_start         = line_starts[line_idx];
+    std::size_t line_start = line_starts[line_idx];
+    std::size_t line_end   = (line_idx + 1 < line_starts.size()) ? line_starts[line_idx + 1] : getTotalLength();
+
     std::size_t offset_within_line = line_start;
-    std::size_t line_end           = line_starts[line_idx + 1];
     while (offset_within_line < line_end) {
 	const auto& [piece, accum_piece_offset] = findPieceAt(offset_within_line);
-	if (piece.source == SourceType::ORIGINAL) {
-	    views.push_back(std::string_view{original_buf.data() + piece.offset, piece.length});
+
+	std::size_t offset_within_piece = offset_within_line - accum_piece_offset;
+
+	const auto* base_buf = (piece.source == SourceType::ORIGINAL) ? original_buf.data() : add_buf.data();
+
+
+	std::size_t overlay_offset = overlay.start_offset;
+	std::size_t piece_end_offset = accum_piece_offset + piece.length;
+	if (!overlay.empty() &&
+	    accum_piece_offset >= overlay_offset &&
+	    overlay_offset  <= piece_end_offset) {
+
+	    std::size_t split_point = overlay_offset - accum_piece_offset;
+
+	    if (split_point > 0) {
+		views.push_back(std::string_view{base_buf + piece.offset, split_point});
+	    }
+
+	    views.push_back(std::string_view{overlay.text.data(), overlay.text.size()});
+
+	    if (piece.length > split_point) {
+		views.push_back(std::string_view{base_buf + piece.offset + split_point, piece.length - split_point});
+	    }
 	} else {
-	    views.push_back(std::string_view{add_buf.data() + piece.offset, piece.length});
+	    views.push_back(std::string_view{base_buf + piece.offset, piece.length});
 	}
+
 	offset_within_line += piece.length;
     }
 
     return views;
 }
 
-std::vector<std::string_view> PieceTable::getLastLine()
-{
-    std::vector<std::string_view> views{};
-
-    std::size_t offset_within_last_line = line_starts[line_starts.size() - 1];
-    std::size_t buffer_length = getLength();
-    while (offset_within_last_line < buffer_length) {
-	const auto& [piece, accum_piece_offset] = findPieceAt(offset_within_last_line);
-	if (piece.source == SourceType::ORIGINAL) {
-	    views.push_back(std::string_view{original_buf.data() + piece.offset, piece.length});
-	} else {
-	    views.push_back(std::string_view{add_buf.data() + piece.offset, piece.length});
-	}
-	offset_within_last_line += piece.length;
-    }
-    
-    return views;
-}
 
 std::size_t PieceTable::getLineCount()
 {
     return line_starts.size();
 }
 
-std::size_t PieceTable::getLength()
+std::size_t PieceTable::getTotalLength()
 {
     const auto* data = pieces.getRoot()->getRightMostData();
     return data->key + data->piece.length;

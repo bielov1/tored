@@ -14,7 +14,24 @@
 #include "la.h"
 
 // ============================================================================
+enum class KeyInputTag : int
+{
+    KIT_BACKSPACE,
+    KIT_ENTER,
+    KIT_LEFT,
+    KIT_RIGHT,
+    KIT_UP,
+    KIT_DOWN,
+    KIT_F1,
+    KIT_F2,
+    KIT_F3,
+    KIT_F4,
+    KIT_F5,
+    __static_key_input_tag_count
+};
 
+enum class SplitType;
+struct OverlayBuffer;
 class Graphic
 {
 public:
@@ -39,10 +56,12 @@ public:
     BufferView(Rectangle *r,
 	       ViewPort *vp,
 	       Cursor *c,
+	       OverlayBuffer *pb,
 	       IBuffer *b)
         : window_rect( r )
 	, view_port( vp )
 	, cursor( c )
+	, overlay_buffer( pb )
 	, buffer( b )
     {}
 
@@ -56,8 +75,10 @@ private:
     Rectangle *window_rect;
     ViewPort *view_port;
     Cursor *cursor;
+    OverlayBuffer *overlay_buffer;
     IBuffer *buffer;
 };
+
 
 struct Leaf;
 struct Node;
@@ -72,10 +93,12 @@ public:
     Window(Rectangle r,
 	   ViewPort vp,
 	   Cursor c,
+	   OverlayBuffer pb,
 	   std::shared_ptr<IBuffer> b)
         : rect{ r }
 	, view_port{ vp }
         , cursor{ c }
+	, overlay_buffer{ pb.start_offset }
 	, buffer{ std::move(b) }
     {}
     
@@ -83,6 +106,7 @@ public:
 
     void draw(const Font& font, int char_width, int char_height) override {
         for (auto& child : graphics) {
+	    // lazy dump overlay buffer
             child->draw(font, char_width, char_height);
         }
     }
@@ -92,13 +116,17 @@ public:
     }
     //remove(std::shared_ptr<Graphic> component) override {}
 
+    void dumpOverlayBuffer();
+    void handleCharInput(char c);
+    void handleNavigationOrActionKey(KeyInputTag key);
+    
     void moveCursorLeft();
     void moveCursorRight();
     void moveCursorUp();
     void moveCursorDown();
     void backspaceOnCursor(LayoutTree& root_tree);
     void newlineOnCursor();
-    void insertText(std::size_t cursor_offset, const std::string& text);
+    // void backspaceOnCursor();
     void scrollToCursor();
     
     void recalcViewPort(int char_width, int char_heigth);
@@ -121,6 +149,7 @@ public:
     Rectangle rect;
     ViewPort view_port;
     Cursor cursor;
+    OverlayBuffer overlay_buffer;
     std::shared_ptr<IBuffer> buffer;
 };
 
@@ -157,13 +186,18 @@ static std::shared_ptr<Window> createNewWindow(int window_width, int window_heig
         window_rect,
         view_port,
         cursor,
+	OverlayBuffer{cursor.getOffset()},
 	std::make_shared<PieceTable>("Hello World!\n")
     );
 
-    // new_window->insertText(13, "TESTTEST");
-    // new_window->insertText(21, "More TESTS");
-    new_window->insertText(0, "Hello Cruel World!\n");
-    new_window->insertText(6, "Hello Happy World!");
+    std::string text{"TESTTEST\n"};
+    for (const auto& c : text) {
+	new_window->handleCharInput(c);
+    }
+
+    new_window->dumpOverlayBuffer();
+    
+    
     new_window->attachBufferView();
     return new_window;
 }
@@ -241,6 +275,7 @@ struct SplitVisitor
 			    leaf.window->getCursorOffset()
 			}
 		    },
+		    OverlayBuffer{leaf.window->getCursorOffset()},
 		    leaf.window->getBufferShared()
 		);
 		
@@ -276,6 +311,7 @@ struct SplitVisitor
 			    leaf.window->getCursorOffset()
 			}
 		    },
+		    OverlayBuffer{leaf.window->getCursorOffset()},
 		    leaf.window->getBufferShared()
                 );
 	    }

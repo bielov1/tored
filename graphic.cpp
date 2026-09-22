@@ -35,19 +35,14 @@ void BufferView::draw(const Font& font, int char_width, int char_height)
     std::size_t i;
     std::size_t line_count = buffer->getLineCount();
     std::size_t end_line = view_port->first_visible_line + view_port->visible_lines;
-    for (i = view_port->first_visible_line; i < line_count - 1 && i < end_line; ++i) {
-	auto line_slices = buffer->getLine(i);	
+    for (i = view_port->first_visible_line; i < line_count && i < end_line; ++i) {
+	auto line_slices = buffer->getLine(i, *overlay_buffer);	
 	for (const auto& slice : line_slices) {
 	    renderTextSlice(slice, font, draw_char_pos, char_width, char_height);
 	}
 	
 	draw_char_pos.x  = 0.f;
 	draw_char_pos.y += char_height;
-    }
-    // render last line;
-    auto last_line_slices = buffer->getLastLine();
-    for (const auto& slice : last_line_slices) {
-	renderTextSlice(slice, font, draw_char_pos, char_width, char_height);
     }
     
     // draw cursor
@@ -127,6 +122,76 @@ void BufferView::draw(const Font& font, int char_width, int char_height)
 //     }
 // }
 
+void Window::dumpOverlayBuffer()
+{
+    if (overlay_buffer.empty()) return;
+
+    buffer->insert(overlay_buffer.start_offset, overlay_buffer.text);
+    overlay_buffer.clear();
+}
+
+void Window::handleCharInput(char c)
+{
+    if (overlay_buffer.empty()) {
+	overlay_buffer.start_offset = cursor.getOffset();
+    }
+
+    overlay_buffer.append(c);
+    cursor.advanceOffset();
+}
+
+void Window::handleNavigationOrActionKey(KeyInputTag key)
+{
+    dumpOverlayBuffer();
+    
+    switch (key) {
+    case KeyInputTag::KIT_BACKSPACE:
+	// backspace();
+	break;
+    case KeyInputTag::KIT_ENTER:
+	newlineOnCursor();
+	break;
+    case KeyInputTag::KIT_LEFT:
+	moveCursorLeft();
+	break;
+    case KeyInputTag::KIT_RIGHT:
+	moveCursorRight();
+	break;
+    case KeyInputTag::KIT_UP:
+	moveCursorUp();
+	break;
+    case KeyInputTag::KIT_DOWN:
+	moveCursorDown();
+	break;
+    case KeyInputTag::KIT_F1:
+	//switchActiveWindow();
+	break;    
+    case KeyInputTag::KIT_F2:
+	//splitActiveWindow(SplitType::Horizontal);
+	break;
+    case KeyInputTag::KIT_F3:
+	//splitActiveWindow(SplitType::Vertical);
+	break;
+    case KeyInputTag::KIT_F4:
+	//closeAndSwitchActiveWindow();
+	break;
+	// case GLFW_KEY_F5:
+	// 	std::fprintf(stdout, "F5 was pressed\n");
+	// 	saveToFile(std::string{"output"});
+	// 	break;
+    default:
+	std::fprintf(stderr, "[WARNING] uknown key input\n");
+    }
+}
+
+// void Window::closeAndSwitchActiveWindow()
+// {
+//     // TODO
+//     // if (auto result = std::ranges::find(window_list, active_window) != window_list.end()) {
+//     // 	window_list.remove(active_window);
+//     // }   
+// }
+
 void Window::moveCursorLeft()
 {
     // if (getBufferText().empty()) return;    
@@ -196,11 +261,6 @@ void Window::newlineOnCursor()
     // recalculateCursor(root_tree, getCursorLine(), getCursorCol());
 }
 
-void Window::insertText(std::size_t cursor_offset, const std::string& text)
-{
-    buffer->insert(cursor_offset, text);
-}
-
 void Window::scrollToCursor()
 {
     // std::size_t padding = 5;   
@@ -229,6 +289,6 @@ void Window::recalcViewPort(int char_width, int char_height)
 
 void Window::attachBufferView()
 {
-    auto view = std::make_shared<BufferView>(&rect, &view_port, &cursor, buffer.get());
+    auto view = std::make_shared<BufferView>(&rect, &view_port, &cursor, &overlay_buffer, buffer.get());
     add(view);
 }
