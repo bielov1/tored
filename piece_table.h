@@ -10,6 +10,7 @@
 
 struct Data;
 struct OverlayBuffer;
+struct LineCol;
 class IBuffer
 {
 public:
@@ -21,6 +22,7 @@ public:
     virtual std::vector<std::string_view> getLine(std::size_t line_idx, const OverlayBuffer& overlay) = 0;
     virtual std::size_t getLineCount() = 0;
     virtual std::size_t getTotalLength() = 0;
+    virtual LineCol offsetToLineCol(std::size_t offset) = 0;
     virtual bool empty() = 0;
 };
 
@@ -64,6 +66,12 @@ struct Data
     Piece piece;
 };
 
+struct LineCol
+{
+    std::size_t line;
+    std::size_t col;
+};
+
 class PieceTable : public IBuffer
 {
 public:    
@@ -76,6 +84,7 @@ public:
     std::vector<std::string_view> getLine(std::size_t line_idx, const OverlayBuffer& overlay) override final;
     std::size_t getLineCount() override final;
     std::size_t getTotalLength() override final;
+    LineCol offsetToLineCol(std::size_t offset) override final;
     bool empty() override final;
     
     // void insertLine(std::string line);
@@ -107,9 +116,8 @@ private:
     std::string original_buf;
     std::string add_buf;
     
-    using LineIdx = std::size_t;
     using BufferOffset = std::size_t;
-    std::unordered_map<LineIdx, BufferOffset> line_starts;
+    std::vector<BufferOffset> line_starts;
     btree::BTree<Data, M> pieces;
 };
 

@@ -65,7 +65,6 @@ public:
 	, buffer( b )
     {}
 
-    void renderTextSlice(std::string_view slice, const Font& font, Vec2f& draw_pos, int char_width, int char_height);
     void draw(const Font& font, int char_width, int char_height) override;
     // CursorDrawType getCursorDrawType() { return cursor->getDrawType(); }
     // std::size_t getCursorLine() { return cursor->getLine(); }
@@ -78,7 +77,6 @@ private:
     OverlayBuffer *overlay_buffer;
     IBuffer *buffer;
 };
-
 
 struct Leaf;
 struct Node;
@@ -187,16 +185,8 @@ static std::shared_ptr<Window> createNewWindow(int window_width, int window_heig
         view_port,
         cursor,
 	OverlayBuffer{cursor.getOffset()},
-	std::make_shared<PieceTable>("Hello World!\n")
+	std::make_shared<PieceTable>("Hello World!")
     );
-
-    std::string text{"TESTTEST\n"};
-    for (const auto& c : text) {
-	new_window->handleCharInput(c);
-    }
-
-    new_window->dumpOverlayBuffer();
-    
     
     new_window->attachBufferView();
     return new_window;

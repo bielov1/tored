@@ -1,132 +1,86 @@
 #include "graphic.h"
 
-void BufferView::renderTextSlice(std::string_view slice, const Font& font, Vec2f& draw_pos, int char_width, int char_height)
+void BufferView::draw(const Font& font, int char_width, int char_height)
 {
-    for (const auto& c : slice) {
+    if (buffer->empty()) return;
+        
+    // draw text
+    Vec2f start_pos = { window_rect->x, window_rect->y };
+    Vec2f draw_char_pos = start_pos;
+
+    auto drawChar = [&](char c, Vec2f& pos, Color color) -> void {
 	int idx = GetGlyphIndex(font, c);
-	if (c == '\n') continue;
 	if (idx >= 0 && idx < font.glyphCount) {
 	    Rectangle src = font.recs[idx];
 	    Rectangle dst = {
-		draw_pos.x,
-		draw_pos.y,
+		pos.x,
+		pos.y,
 		static_cast<float>(char_width),
 		static_cast<float>(char_height)
 	    };
 		
-	    DrawTexturePro(font.texture, src, dst, Vector2{ 0.0f, 0.0f }, 0.0f, WHITE);
-	    if (draw_pos.x + char_width > view_port->visible_cols * char_width) {
-		draw_pos.x = 0.f;
-		draw_pos.y += char_height;
-	    } else {
-		draw_pos.x += char_width;
-	    }
+	    DrawTexturePro(font.texture, src, dst, Vector2{ 0.0f, 0.0f }, 0.0f, color);
 	}
-    }
-}
-
-void BufferView::draw(const Font& font, int char_width, int char_height)
-{
-    if (buffer->empty()) return;
-   
-    Vec2f start_pos = { window_rect->x, window_rect->y };
-    Vec2f draw_char_pos = start_pos;
-
+    };
+    
     std::size_t i;
     std::size_t line_count = buffer->getLineCount();
     std::size_t end_line = view_port->first_visible_line + view_port->visible_lines;
     for (i = view_port->first_visible_line; i < line_count && i < end_line; ++i) {
 	auto line_slices = buffer->getLine(i, *overlay_buffer);	
 	for (const auto& slice : line_slices) {
-	    renderTextSlice(slice, font, draw_char_pos, char_width, char_height);
+	    for (const auto& c : slice) {
+		if (c == '\n') continue;
+		drawChar(c, draw_char_pos, WHITE);		
+		if (draw_char_pos.x + char_width >= view_port->visible_cols * char_width) {
+		    draw_char_pos.x = start_pos.x;
+		    draw_char_pos.y += char_height;
+		} else {
+		    draw_char_pos.x += char_width;
+		}
+	    }
 	}
 	
-	draw_char_pos.x  = 0.f;
+	draw_char_pos.x  = start_pos.x;
 	draw_char_pos.y += char_height;
     }
-    
-    // draw cursor
-    
-}
-
-// void BufferView::draw(const Font& font, int char_width, int char_height)
-// {
-//     assert(font.recs);
-//     assert(font.glyphCount > 0);
-    
-//     if (getBuffer().empty()) return;
-
-//     std::size_t i;
-//     std::size_t j;
-
-//     Vec2f start_pos = { window_rect->x, window_rect->y };
-//     Vec2f draw_char_pos = start_pos;
-
-//     // draw windows bounds
-//     DrawRectangleLinesEx(*window_rect, 2.f, WHITE);
-    
-//     // render text on screen
-//     std::size_t end_line = view_port->first_visible_line + view_port->visible_lines;
-//     for (i = view_port->first_visible_line; i < end_line && i < getBufferText().size(); ++i) {
-// 	const auto& [line_size, line_text] = getBufferText()[i];
-	
-// 	std::size_t col_idx = 0;
-// 	for (j = view_port->first_visible_col; j < line_size; ++j) {
-//             if (col_idx >= view_port->visible_cols) break;
-
-//             drawChar(font, line_text[j], char_width, char_height, draw_char_pos, WHITE);
-//             draw_char_pos.x += char_width;
-//             col_idx++;
-//         }
-
-//         draw_char_pos.y += char_height;
-//         draw_char_pos.x  = start_pos.x;
-//     }
-
-//     // render cursor
-//     float rel_col = static_cast<float>(getCursorCol() - view_port->first_visible_col);
-//     float rel_line = static_cast<float>(getCursorLine() - view_port->first_visible_line);
    
-//     Vec2f cursor_pixel_pos{
-// 	start_pos.x + rel_col * char_width,
-// 	start_pos.y + rel_line * char_height
-//     };
-    
-//     Rectangle cursor_rec = {
-// 	.x      = cursor_pixel_pos.x,
-// 	.y      = cursor_pixel_pos.y,
-// 	.width  = static_cast<float>(char_width),
-// 	.height = static_cast<float>(char_height)
-//     };
+    // draw cursor
+    if (view_port->visible_cols > 0) {
+	LineCol base = buffer->offsetToLineCol(cursor->getOffset());
+	
+	std::size_t total_cols = base.col + overlay_buffer->text.size();
+	std::size_t wrapped_rows = total_cols / view_port->visible_cols;
+	std::size_t final_col = total_cols % view_port->visible_cols;
+	std::size_t absolute_visual_line = base.line + wrapped_rows;
 
+	Vec2f cursor_draw_pos = {
+	    start_pos.x + static_cast<float>(final_col * char_width),
+	    start_pos.y + static_cast<float>(absolute_visual_line * char_height)
+	};
     
-//     auto curr_cursor_draw_type = getCursorDrawType();
-//     if (curr_cursor_draw_type == CursorDrawType::Filled) {
-// 	DrawRectangleRec(cursor_rec, WHITE);
-//     } else if (curr_cursor_draw_type == CursorDrawType::Hollow) {
-// 	DrawRectangleLinesEx(cursor_rec, 1.f, WHITE);
-//     }
+	Rectangle cursor_rec = {
+	    .x      = cursor_draw_pos.x,
+	    .y      = cursor_draw_pos.y,
+	    .width  = static_cast<float>(char_width),
+	    .height = static_cast<float>(char_height)
+	};
 
-//     if (getCursorLine() < getBufferText().size()) {
-// 	const auto& [line_size, line_text] = getBufferText()[getCursorLine()];
-// 	if (getCursorCol() < line_size) {
-// 	    char c = line_text[getCursorCol()];
-// 	    if (c != '\n') {
-// 		if (curr_cursor_draw_type == CursorDrawType::Filled) {
-// 		    drawChar(font, c, char_width, char_height, cursor_pixel_pos, BLACK);
-// 		} else if (curr_cursor_draw_type == CursorDrawType::Hollow) {
-// 		    drawChar(font, c, char_width, char_height, cursor_pixel_pos, WHITE);
-// 		}
-// 	    }
-// 	}
-//     }
-// }
+	DrawRectangleRec(cursor_rec, WHITE);
+    
+	char c = buffer->getCharAt(cursor->getOffset());
+	if (c != '\n' && c != '\0') {
+	    drawChar(c, cursor_draw_pos, BLACK);
+	}
+    }
+}
 
 void Window::dumpOverlayBuffer()
 {
     if (overlay_buffer.empty()) return;
 
     buffer->insert(overlay_buffer.start_offset, overlay_buffer.text);
+    cursor.setOffset(overlay_buffer.start_offset + overlay_buffer.text.size());
     overlay_buffer.clear();
 }
 
@@ -137,7 +91,6 @@ void Window::handleCharInput(char c)
     }
 
     overlay_buffer.append(c);
-    cursor.advanceOffset();
 }
 
 void Window::handleNavigationOrActionKey(KeyInputTag key)

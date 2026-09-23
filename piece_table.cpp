@@ -3,7 +3,7 @@
 PieceTable::PieceTable(const std::string& text_buffer)
     : original_buf{ text_buffer }
     , add_buf{ "" }
-    , line_starts{ {0, 0} }
+    , line_starts{}
     , pieces{}
 {
     init(text_buffer);
@@ -126,9 +126,6 @@ std::vector<std::string_view> PieceTable::getLine(std::size_t line_idx,
     std::size_t offset_within_line = line_start;
     while (offset_within_line < line_end) {
 	const auto& [piece, accum_piece_offset] = findPieceAt(offset_within_line);
-
-	std::size_t offset_within_piece = offset_within_line - accum_piece_offset;
-
 	const auto* base_buf = (piece.source == SourceType::ORIGINAL) ? original_buf.data() : add_buf.data();
 
 
@@ -138,16 +135,16 @@ std::vector<std::string_view> PieceTable::getLine(std::size_t line_idx,
 	    accum_piece_offset >= overlay_offset &&
 	    overlay_offset  <= piece_end_offset) {
 
-	    std::size_t split_point = overlay_offset - accum_piece_offset;
+	    std::size_t split_point_in_piece = overlay_offset - accum_piece_offset;
 
-	    if (split_point > 0) {
-		views.push_back(std::string_view{base_buf + piece.offset, split_point});
+	    if (split_point_in_piece > 0) {
+		views.push_back(std::string_view{base_buf + piece.offset, split_point_in_piece});
 	    }
 
 	    views.push_back(std::string_view{overlay.text.data(), overlay.text.size()});
 
-	    if (piece.length > split_point) {
-		views.push_back(std::string_view{base_buf + piece.offset + split_point, piece.length - split_point});
+	    if (piece.length > split_point_in_piece) {
+		views.push_back(std::string_view{base_buf + piece.offset + split_point_in_piece, piece.length - split_point_in_piece});
 	    }
 	} else {
 	    views.push_back(std::string_view{base_buf + piece.offset, piece.length});
@@ -171,6 +168,24 @@ std::size_t PieceTable::getTotalLength()
     return data->key + data->piece.length;
 }
 
+LineCol PieceTable::offsetToLineCol(std::size_t offset)
+{
+    LineCol lc{0, 0};
+
+    auto it = std::upper_bound(line_starts.begin(), line_starts.end(), offset);
+
+    if (it != line_starts.begin()) {
+        lc.line = static_cast<std::size_t>(std::distance(line_starts.begin(), it) - 1);
+    } else {
+        lc.line = 0;
+    }
+    
+    std::size_t line_start_offset = line_starts[lc.line];
+    lc.col = (offset >= line_start_offset) ? (offset - line_start_offset) : 0;
+
+    return lc;
+}
+
 bool PieceTable::empty()
 {
     return pieces.getRoot() ? false : true;
@@ -188,6 +203,7 @@ void PieceTable::init(const std::string& text_buffer)
     });
     pieces.insert(std::move(initial_piece));
 
+    line_starts.push_back(0);
     updateLineStartsOnInsert(0, text_buffer);
 }
 
@@ -227,73 +243,45 @@ std::vector<std::size_t> PieceTable::findNewlineOffsets(std::string_view text) {
 
 void PieceTable::updateLineStartsOnInsert(std::size_t insert_offset, std::string_view inserted_text)
 {
+    if (inserted_text.empty()) return;
+
     std::size_t delta = inserted_text.size();
 
-    for (auto& [line, key_offset] : line_starts) {
-        if (key_offset > insert_offset) {
-            key_offset += delta;
+    for (auto& line_offset : line_starts) {
+        if (line_offset > insert_offset) {
+            line_offset += delta;
         }
     }
 
-    // Locate newlines inside inserted text
     auto nl_positions = findNewlineOffsets(inserted_text);
     if (nl_positions.empty()) return;
 
-    std::vector<std::pair<std::size_t, BufferOffset>> existing_lines(line_starts.begin(), line_starts.end());
-    std::ranges::sort(existing_lines);
+    auto insert_pos = std::upper_bound(line_starts.begin(), line_starts.end(), insert_offset);
 
-    line_starts.clear();
-    std::size_t current_line = 0;
-
-    //line_starts[0] = 0;
-
-    for (const auto& [line_num, key_offset] : existing_lines) {
-        if (key_offset <= insert_offset) {
-            line_starts[line_num] = key_offset;
-            current_line = line_num + 1;
-        }
-    }
+    std::vector<BufferOffset> new_line_starts;
+    new_line_starts.reserve(nl_positions.size());
 
     for (std::size_t pos : nl_positions) {
-        line_starts[current_line++] = insert_offset + pos + 1;
+        new_line_starts.push_back(insert_offset + pos + 1);
     }
 
-    for (const auto& [line_num, key_offset] : existing_lines) {
-        if (key_offset > insert_offset) {
-            line_starts[current_line++] = key_offset;
-        }
-    }
+    line_starts.insert(insert_pos, new_line_starts.begin(), new_line_starts.end());
 }
 
 void PieceTable::updateLineStartsOnRemove(std::size_t remove_offset, std::size_t remove_length)
 {
+    if (remove_length == 0 || line_starts.empty()) return;
+
     std::size_t remove_end = remove_offset + remove_length;
 
-    std::vector<std::size_t> lines_to_remove;
-    for (const auto& [line, key_offset] : line_starts) {
-        if (key_offset > remove_offset && key_offset <= remove_end) {
-            lines_to_remove.push_back(line);
+    std::erase_if(line_starts, [remove_offset, remove_end](BufferOffset offset) {
+        return offset > remove_offset && offset <= remove_end;
+    });
+
+    for (auto& line_offset : line_starts) {
+        if (line_offset > remove_end) {
+            line_offset -= remove_length;
         }
-    }
-
-    for (std::size_t l : lines_to_remove) {
-        line_starts.erase(l);
-    }
-
-    std::vector<std::size_t> remaining_keys;
-    for (const auto& [line, key_offset] : line_starts) {
-        if (key_offset > remove_end) {
-            remaining_keys.push_back(key_offset - remove_length);
-        } else {
-            remaining_keys.push_back(key_offset);
-        }
-    }
-
-    std::ranges::sort(remaining_keys);
-
-    line_starts.clear();
-    for (std::size_t i = 0; i < remaining_keys.size(); ++i) {
-        line_starts[i] = remaining_keys[i];
     }
 }
 
