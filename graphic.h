@@ -71,9 +71,11 @@ public:
 	, overlay_buf( ob )
 	, buffer( b )
     {}
-    
-    template<typename DrawCharFunc>
-    void drawOverlay(Vec2f& pos, DrawCharFunc&& drawChar);
+    template<typename DrawCharFunc, typename WrapFunc>
+    void drawOverlay(Vec2f& pos, Vec2f& cursor_draw_pos,
+		     std::size_t offset_counter,
+		     DrawCharFunc&& drawChar,
+		     WrapFunc&& getWrappedPos);
     void draw(const Font& font, const CharParams params) override;
     // CursorDrawType getCursorDrawType() { return cursor->getDrawType(); }
     // std::size_t getCursorLine() { return cursor->getLine(); }

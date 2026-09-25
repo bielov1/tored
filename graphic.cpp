@@ -1,10 +1,19 @@
 #include "graphic.h"
 
-template<typename DrawCharFunc>
-void BufferView::drawOverlay(Vec2f& pos, DrawCharFunc&& drawChar)
+template<typename DrawCharFunc, typename WrapFunc>
+void BufferView::drawOverlay(Vec2f& pos, Vec2f& cursor_draw_pos,
+                             std::size_t offset_counter,
+                             DrawCharFunc&& drawChar,
+                             WrapFunc&& getWrappedPos)
 {
     for (const auto& c : overlay_buf->text) {
-	drawChar(c, pos, WHITE);
+        pos = getWrappedPos(pos, c);
+
+        if (cursor->getOffset() == offset_counter) {
+            cursor_draw_pos = pos;
+        }
+
+        drawChar(c, pos, WHITE);
     }
 }
 
@@ -23,47 +32,48 @@ void BufferView::draw(const Font& font, const CharParams params)
 	    pos.y += params.height;
 	    return;
 	}
-	
-
-	float draw_x = pos.x;
-	float draw_y = pos.y;
-
-	if (draw_x + params.width > view_port->visible_cols * params.width) {
-	    draw_x  = start_pos.x;
-	    draw_y += params.height;
-	}
-	    
 	int idx = GetGlyphIndex(font, c);
 	if (idx >= 0 && idx < font.glyphCount) {
 	    Rectangle src = font.recs[idx];
 	    Rectangle dst = {
-		draw_x,
-		draw_y,
+		pos.x,
+		pos.y,
 		params.width,
 		params.height
 	    };
-		
+        
 	    DrawTexturePro(font.texture, src, dst, Vector2{ 0.0f, 0.0f }, 0.0f, color);
 	}
-	
-	draw_x += params.width;
-
-	pos.x = draw_x;
-	pos.y = draw_y;
+	pos.x += params.width;
     };
 
+    auto getWrappedPos = [&](Vec2f pos, char c) -> Vec2f {
+	if (c != '\n' && pos.x + params.width > view_port->visible_cols * params.width) {
+	    pos.x  = start_pos.x;
+	    pos.y += params.height;
+	}
+	return pos;
+    };
+
+    Vec2f cursor_draw_pos = { 0.f, 0.f };
+    
     std::size_t line_count = buffer->getLineCount();
     std::size_t last_visible_line = view_port->first_visible_line + view_port->visible_lines;
-    std::size_t end_line = last_visible_line > 0 ? last_visible_line : 1;
 
     std::size_t offset_counter = buffer->getLineStart(view_port->first_visible_line);
-    for (std::size_t i = view_port->first_visible_line; i < line_count && i < end_line; ++i) {
+    for (std::size_t i = view_port->first_visible_line; i < line_count && i < last_visible_line; ++i) {
 	auto line_slices = buffer->getLineSlices(i);
 	if (line_slices.empty()) break;
 	for (const auto& slice : line_slices) {
-	    for (const auto& c : slice) {
+	    for (const auto& c : slice) {		
 		if (!overlay_buf->empty() && offset_counter == overlay_buf->start_offset) {
-		    drawOverlay(draw_char_pos, drawChar);
+		    drawOverlay(draw_char_pos, cursor_draw_pos, offset_counter, drawChar, getWrappedPos);
+		}
+
+		draw_char_pos = getWrappedPos(draw_char_pos, c);
+		
+		if (cursor->getOffset() == offset_counter) {
+		    cursor_draw_pos = draw_char_pos;
 		}
 		
 		drawChar(c, draw_char_pos, WHITE);
@@ -74,42 +84,28 @@ void BufferView::draw(const Font& font, const CharParams params)
 
     // overlay buffer at the end of the text
     if (!overlay_buf->empty() && offset_counter == overlay_buf->start_offset) {
-	drawOverlay(draw_char_pos, drawChar);
+	drawOverlay(draw_char_pos, cursor_draw_pos, offset_counter, drawChar, getWrappedPos);
     }
     
     // draw cursor
-    LineCol base = buffer->offsetToLineCol(cursor->getOffset());
-
-    // IRRELEVENT
-    std::size_t visible_cols = view_port->visible_cols > 0 ? view_port->visible_cols : 1;
-    std::size_t total_cols   = base.col + overlay_buf->text.size();
-    std::size_t wrapped_rows = total_cols / visible_cols;
-    std::size_t final_col    = total_cols % visible_cols;
-    std::size_t absolute_visual_line = base.line + wrapped_rows;
-
-    if (absolute_visual_line >= view_port->first_visible_line) {
-        std::size_t screen_line = absolute_visual_line - view_port->first_visible_line;
-
-        Vec2f cursor_draw_pos = {
-            start_pos.x + final_col * params.width,
-            start_pos.y + screen_line * params.height
-        };
-        
-        Rectangle cursor_rec = {
-            .x      = cursor_draw_pos.x,
-            .y      = cursor_draw_pos.y,
-            .width  = params.width,
-            .height = params.height
-        };
-
-        DrawRectangleRec(cursor_rec, WHITE);
-        
-        char c = buffer->getCharAt(cursor->getOffset());
-        if (c != '\n' && c != '\0') {
-            Vec2f temp_pos = cursor_draw_pos;
-            drawChar(c, temp_pos, BLACK);
-        }
+    if (cursor->getOffset() == offset_counter) {
+	cursor_draw_pos = draw_char_pos;
     }
+    
+    Rectangle cursor_rec = {
+	.x      = cursor_draw_pos.x,
+	.y      = cursor_draw_pos.y,
+	.width  = params.width,
+	.height = params.height
+    };
+
+    DrawRectangleRec(cursor_rec, WHITE);
+        
+    char c = buffer->getCharAt(cursor->getOffset());
+    if (c != '\n' && c != '\0') {
+	Vec2f temp_pos = cursor_draw_pos;
+	drawChar(c, temp_pos, BLACK);
+    }   
 }
 
 void Window::dumpOverlayBuffer()
@@ -259,8 +255,13 @@ void Window::scrollToCursor()
 
 void Window::recalcViewPort(int char_width, int char_height)
 {
-    view_port.visible_cols = static_cast<std::size_t>(rect.width / char_width);
-    view_port.visible_lines = static_cast<std::size_t>(rect.height / char_height);
+    assert(char_width > 0);
+    assert(char_height > 0);
+    const auto cols  = static_cast<std::size_t>(rect.width  / static_cast<float>(char_width));
+    const auto lines = static_cast<std::size_t>(rect.height / static_cast<float>(char_height));
+
+    view_port.visible_cols  = std::max<std::size_t>(1, cols);
+    view_port.visible_lines = std::max<std::size_t>(1, lines);
 }
 
 void Window::attachBufferView()
