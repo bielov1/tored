@@ -19,11 +19,13 @@ public:
     virtual void insert(std::size_t offset, const std::string& text) = 0;
     virtual void remove(std::size_t offset, std::size_t length) = 0;
     virtual char getCharAt(std::size_t offset) = 0;
-    virtual std::vector<std::string_view> getLine(std::size_t line_idx, const OverlayBuffer& overlay) = 0;
-    virtual std::size_t getLineCount() = 0;
+    //virtual std::vector<std::string_view> getLine(std::size_t line_idx, const OverlayBuffer& overlay) = 0;
+    virtual std::vector<std::string_view> getLineSlices(std::size_t line_idx) noexcept = 0;
+    virtual std::size_t getLineStart(std::size_t line_idx) const = 0;
+    virtual std::size_t getLineCount() const = 0;
     virtual std::size_t getTotalLength() = 0;
-    virtual LineCol offsetToLineCol(std::size_t offset) = 0;
-    virtual bool empty() = 0;
+    virtual LineCol offsetToLineCol(std::size_t offset) const = 0;
+    virtual bool empty() const = 0;
 };
 
 struct OverlayBuffer
@@ -81,11 +83,13 @@ public:
     void insert(std::size_t offset, const std::string& text) override final;
     void remove(std::size_t offset, std::size_t length) override final;
     char getCharAt(std::size_t offset) override final;
-    std::vector<std::string_view> getLine(std::size_t line_idx, const OverlayBuffer& overlay) override final;
-    std::size_t getLineCount() override final;
+    //std::vector<std::string_view> getLineSlices(std::size_t line_idx, const OverlayBuffer& overlay) override final;
+    std::vector<std::string_view> getLineSlices(std::size_t line_idx) noexcept override final;
+    std::size_t getLineStart(std::size_t line_idx) const override final;
+    std::size_t getLineCount() const override final;
     std::size_t getTotalLength() override final;
-    LineCol offsetToLineCol(std::size_t offset) override final;
-    bool empty() override final;
+    LineCol offsetToLineCol(std::size_t offset) const override final;
+    bool empty() const override final;
     
     // void insertLine(std::string line);
     // void removeLine(std::size_t cursor_line);

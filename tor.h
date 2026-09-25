@@ -42,8 +42,12 @@ struct RenderVisitor
     Font font;
 
     void operator()(const Leaf& leaf) const {
+	
         if (leaf.window) {
-            leaf.window->draw(font, leaf.char_width, leaf.char_height);
+            leaf.window->draw(font, CharParams{
+		    .width  = static_cast<float>(leaf.char_width),
+		    .height = static_cast<float>(leaf.char_height)
+		});
         }
     }
 

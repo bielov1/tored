@@ -30,14 +30,21 @@ enum class KeyInputTag : int
     __static_key_input_tag_count
 };
 
+struct CharParams
+{
+    float width;
+    float height;
+};
+
 enum class SplitType;
 struct OverlayBuffer;
+
 class Graphic
 {
 public:
     virtual ~Graphic() = default;
     
-    virtual void draw(const Font& font, int char_width, int char_height) = 0;    
+    virtual void draw(const Font& font, const CharParams params) = 0;    
     virtual void add(std::shared_ptr<Graphic> component) {}
     //virtual remove(std::shared_ptr<Graphic> component) {}
 };
@@ -56,16 +63,18 @@ public:
     BufferView(Rectangle *r,
 	       ViewPort *vp,
 	       Cursor *c,
-	       OverlayBuffer *pb,
+	       OverlayBuffer *ob,
 	       IBuffer *b)
         : window_rect( r )
 	, view_port( vp )
 	, cursor( c )
-	, overlay_buffer( pb )
+	, overlay_buf( ob )
 	, buffer( b )
     {}
-
-    void draw(const Font& font, int char_width, int char_height) override;
+    
+    template<typename DrawCharFunc>
+    void drawOverlay(Vec2f& pos, DrawCharFunc&& drawChar);
+    void draw(const Font& font, const CharParams params) override;
     // CursorDrawType getCursorDrawType() { return cursor->getDrawType(); }
     // std::size_t getCursorLine() { return cursor->getLine(); }
     // std::size_t getCursorCol() { return cursor->getCol(); }
@@ -74,7 +83,7 @@ private:
     Rectangle *window_rect;
     ViewPort *view_port;
     Cursor *cursor;
-    OverlayBuffer *overlay_buffer;
+    OverlayBuffer *overlay_buf;
     IBuffer *buffer;
 };
 
@@ -91,21 +100,21 @@ public:
     Window(Rectangle r,
 	   ViewPort vp,
 	   Cursor c,
-	   OverlayBuffer pb,
+	   OverlayBuffer ob,
 	   std::shared_ptr<IBuffer> b)
         : rect{ r }
 	, view_port{ vp }
         , cursor{ c }
-	, overlay_buffer{ pb.start_offset }
+	, overlay_buf{ ob.start_offset }
 	, buffer{ std::move(b) }
     {}
     
     ~Window() override = default;
 
-    void draw(const Font& font, int char_width, int char_height) override {
+    void draw(const Font& font, const CharParams params) override {	
         for (auto& child : graphics) {
 	    // lazy dump overlay buffer
-            child->draw(font, char_width, char_height);
+            child->draw(font, params);
         }
     }
     
@@ -137,8 +146,6 @@ public:
     IBuffer& getBuffer() { return *(buffer.get()); }
     std::shared_ptr<IBuffer> getBufferShared() const { return buffer; }
     CursorDrawType getCursorDrawType() { return cursor.getDrawType(); }
-    std::size_t getCursorLine() { return cursor.getLine(); }
-    std::size_t getCursorCol() { return cursor.getCol(); }
     std::size_t getCursorOffset() { return cursor.getOffset(); }
     
  private:
@@ -147,7 +154,7 @@ public:
     Rectangle rect;
     ViewPort view_port;
     Cursor cursor;
-    OverlayBuffer overlay_buffer;
+    OverlayBuffer overlay_buf;
     std::shared_ptr<IBuffer> buffer;
 };
 
@@ -171,10 +178,6 @@ static std::shared_ptr<Window> createNewWindow(int window_width, int window_heig
     
     Cursor cursor{
 	CursorDrawType::Filled,
-	BufferPosition {
-	    .line = 0,
-	    .col = 0
-	},
 	BufferOffset {
 	    .byte_offset = 0
 	}
@@ -257,10 +260,6 @@ struct SplitVisitor
 		    leaf.window->getViewPort(),
 		    Cursor{
 			CursorDrawType::Hollow,
-			BufferPosition {
-			    leaf.window->getCursorLine(),
-			    leaf.window->getCursorCol()
-			},
 			BufferOffset {
 			    leaf.window->getCursorOffset()
 			}
@@ -293,10 +292,6 @@ struct SplitVisitor
 		    leaf.window->getViewPort(),
 		    Cursor{
 			CursorDrawType::Hollow,
-			BufferPosition {
-			    leaf.window->getCursorLine(),
-			    leaf.window->getCursorCol()
-			},
 			BufferOffset {
 			    leaf.window->getCursorOffset()
 			}

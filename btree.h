@@ -104,24 +104,24 @@ namespace btree
                 
                 // 1. Try borrowing from left subtree
                 if (children[i]->keys_stored > children[i]->min_keys) {
-                    const auto* pred = getPredecessor(i);
-                    children[i]->erase(pred->key);
-                    *data[i] = std::move(*pred);
+                    const auto pred = getPredecessor(i);
+                    children[i]->erase(pred.key);
+                    *data[i] = pred;
                     return keys_stored >= min_keys ? 0 : 1;
                 }
 
                 // 2. Try borrowing from right subtree
                 if (children[i + 1]->keys_stored > children[i + 1]->min_keys) {
-                    const auto* succ = getSuccessor(i);
-                    children[i + 1]->erase(succ->key);
-                    *data[i] = std::move(*succ);
+                    const auto succ = getSuccessor(i);
+                    children[i + 1]->erase(succ.key);
+                    *data[i] = succ;
                     return keys_stored >= min_keys ? 0 : 1;
                 }
 
                 // 3. Swap with in-order successor and recurse into right child
-                const auto* succ = getSuccessor(i);
-                *data[i] = std::move(*succ);
-                int res = children[i + 1]->erase(succ->key);
+                const auto succ = getSuccessor(i);
+                *data[i] = succ;
+                int res = children[i + 1]->erase(succ.key);
 
                 if (res == 1) {
                     if (children[i]->keys_stored > children[i]->min_keys) {
@@ -251,22 +251,22 @@ namespace btree
 	    children[i] = std::move(y);
 	}
 
-	T* getPredecessor(std::size_t i)
+	T getPredecessor(std::size_t i)
         {
             Node<T, M>* cur = children[i].get();
             while (!cur->is_leaf) {
                 cur = cur->children[cur->keys_stored].get();
             }
-            return cur->data[cur->keys_stored - 1].get();
+            return *cur->data[cur->keys_stored - 1].get();
         }
     
-        T* getSuccessor(std::size_t i)
+        T getSuccessor(std::size_t i)
         {
             Node<T, M>* cur = children[i + 1].get();
             while (!cur->is_leaf) {
                 cur = cur->children[0].get();
             }
-            return cur->data[0].get();
+            return *cur->data[0].get();
         }
     
         void mergeChildren(std::size_t i)
@@ -419,7 +419,7 @@ namespace btree
 	    return overlapped_pieces;
 	}
 
-	std::unique_ptr<Node<T,M>>& getRoot()
+	const std::unique_ptr<Node<T,M>>& getRoot() const
 	{
 	    return root;
 	}
