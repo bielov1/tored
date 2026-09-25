@@ -23,25 +23,33 @@ void BufferView::draw(const Font& font, const CharParams params)
 	    pos.y += params.height;
 	    return;
 	}
+	
+
+	float draw_x = pos.x;
+	float draw_y = pos.y;
+
+	if (draw_x + params.width > view_port->visible_cols * params.width) {
+	    draw_x  = start_pos.x;
+	    draw_y += params.height;
+	}
+	    
 	int idx = GetGlyphIndex(font, c);
 	if (idx >= 0 && idx < font.glyphCount) {
 	    Rectangle src = font.recs[idx];
 	    Rectangle dst = {
-		pos.x,
-		pos.y,
+		draw_x,
+		draw_y,
 		params.width,
 		params.height
 	    };
 		
 	    DrawTexturePro(font.texture, src, dst, Vector2{ 0.0f, 0.0f }, 0.0f, color);
-	    
-	    if (pos.x + params.width >= start_pos.x + (view_port->visible_cols * params.width)) {
-		pos.x = start_pos.x;
-		pos.y += params.height;
-	    } else {
-		pos.x += params.width;
-	    } 
 	}
+	
+	draw_x += params.width;
+
+	pos.x = draw_x;
+	pos.y = draw_y;
     };
 
     std::size_t line_count = buffer->getLineCount();
@@ -52,7 +60,6 @@ void BufferView::draw(const Font& font, const CharParams params)
     for (std::size_t i = view_port->first_visible_line; i < line_count && i < end_line; ++i) {
 	auto line_slices = buffer->getLineSlices(i);
 	if (line_slices.empty()) break;
-	
 	for (const auto& slice : line_slices) {
 	    for (const auto& c : slice) {
 		if (!overlay_buf->empty() && offset_counter == overlay_buf->start_offset) {
@@ -73,6 +80,7 @@ void BufferView::draw(const Font& font, const CharParams params)
     // draw cursor
     LineCol base = buffer->offsetToLineCol(cursor->getOffset());
 
+    // IRRELEVENT
     std::size_t visible_cols = view_port->visible_cols > 0 ? view_port->visible_cols : 1;
     std::size_t total_cols   = base.col + overlay_buf->text.size();
     std::size_t wrapped_rows = total_cols / visible_cols;
