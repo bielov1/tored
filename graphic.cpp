@@ -184,7 +184,6 @@ void Window::moveCursorLeft()
     if (cursor.getOffset() > 0) {
 	cursor.retreatOffset();
     }
-    //scrollToCursor();
 }
 
 void Window::moveCursorRight()
@@ -193,29 +192,35 @@ void Window::moveCursorRight()
     if (cursor.getOffset() < buffer->getTotalLength()) {
 	cursor.advanceOffset();
     }
-    // scrollToCursor();
 }
 
 void Window::moveCursorUp()
 {
-    // if (getBufferText().empty()) return;
-    // if (getCursorLine() > 0) {
-    // 	std::size_t prev_line_size = getBufferText()[getCursorLine() - 1].first;
-    // 	std::size_t new_col = std::ranges::clamp(getCursorCol(), std::size_t{0}, prev_line_size);
-    // 	getCursor().setPosition(getCursorLine() - 1, new_col);
-    // }
-    // scrollToCursor();
+    if (buffer->empty()) return;
+    LineCol cursor_lc = buffer->offsetToLineCol(cursor.getOffset());
+
+    if (cursor_lc.line > 0) {
+	std::size_t offset_within_curr_line = cursor_lc.col;
+	std::size_t prev_line_start = buffer->getLineStart(cursor_lc.line - 1);
+	std::size_t prev_line_end   = buffer->getLineEnd(cursor_lc.line - 1);
+	std::size_t prev_line_size  = prev_line_end - prev_line_start;
+	std::size_t offset_within_prev_line = offset_within_curr_line < prev_line_size ? offset_within_curr_line : prev_line_size;
+	cursor.setOffset(prev_line_start + offset_within_prev_line);
+    }
 }
 
 void Window::moveCursorDown()
-{    
-    // if (getBufferText().empty()) return;
-    // if (getCursorLine() + 1 < getBufferText().size()) {
-    // 	std::size_t next_line_size = getBufferText()[getCursorLine() + 1].first;
-    // 	std::size_t new_col = std::ranges::clamp(getCursorCol(), std::size_t{0}, next_line_size);
-    // 	getCursor().setPosition(getCursorLine() + 1, new_col);
-    // }
-    // scrollToCursor();
+{
+    if (buffer->empty()) return;
+    LineCol cursor_lc = buffer->offsetToLineCol(cursor.getOffset());
+    if (cursor_lc.line + 1 < buffer->getLineCount()) {
+	std::size_t offset_within_curr_line = cursor_lc.col;
+	std::size_t next_line_start = buffer->getLineStart(cursor_lc.line + 1);
+	std::size_t next_line_end   = buffer->getLineEnd(cursor_lc.line + 1);
+	std::size_t next_line_size  = next_line_end - next_line_start;
+	std::size_t offset_within_next_line = offset_within_curr_line < next_line_size ? offset_within_curr_line : next_line_size;
+	cursor.setOffset(next_line_start + offset_within_next_line);
+    }
 }
 
 void Window::backspaceOnCursor(LayoutTree& root_tree)
@@ -246,9 +251,7 @@ void Window::scrollToCursor()
 
     if (cursor_lc.line >= view_port.first_visible_line + view_port.visible_lines) {
         view_port.first_visible_line = cursor_lc.line - view_port.visible_lines + 1;
-    }
-    
-    else if (cursor_lc.line < view_port.first_visible_line) {
+    } else if (cursor_lc.line < view_port.first_visible_line) {
         view_port.first_visible_line = cursor_lc.line;
     }
 }

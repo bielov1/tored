@@ -22,8 +22,9 @@ public:
     //virtual std::vector<std::string_view> getLine(std::size_t line_idx, const OverlayBuffer& overlay) = 0;
     virtual std::vector<std::string_view> getLineSlices(std::size_t line_idx) noexcept = 0;
     virtual std::size_t getLineStart(std::size_t line_idx) const = 0;
+    virtual std::size_t getLineEnd(std::size_t line_idx) const = 0;
     virtual std::size_t getLineCount() const = 0;
-    virtual std::size_t getTotalLength() = 0;
+    virtual std::size_t getTotalLength() const = 0;
     virtual LineCol offsetToLineCol(std::size_t offset) const = 0;
     virtual bool empty() const = 0;
 };
@@ -86,8 +87,9 @@ public:
     //std::vector<std::string_view> getLineSlices(std::size_t line_idx, const OverlayBuffer& overlay) override final;
     std::vector<std::string_view> getLineSlices(std::size_t line_idx) noexcept override final;
     std::size_t getLineStart(std::size_t line_idx) const override final;
+    std::size_t getLineEnd(std::size_t line_idx) const override final;
     std::size_t getLineCount() const override final;
-    std::size_t getTotalLength() override final;
+    std::size_t getTotalLength() const override final;
     LineCol offsetToLineCol(std::size_t offset) const override final;
     bool empty() const override final;
     

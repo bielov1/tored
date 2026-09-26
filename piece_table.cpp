@@ -184,12 +184,21 @@ std::size_t PieceTable::getLineStart(std::size_t line_idx) const
     return line_starts[line_idx];
 }
 
+std::size_t PieceTable::getLineEnd(std::size_t line_idx) const
+{
+    if (line_idx + 1 < line_starts.size()) {
+	return line_starts[line_idx + 1] - 1;
+    } else {
+	return getTotalLength();
+    }
+}
+
 std::size_t PieceTable::getLineCount() const
 {
     return line_starts.size();
 }
 
-std::size_t PieceTable::getTotalLength()
+std::size_t PieceTable::getTotalLength() const
 {
     const auto* data = pieces.getRoot()->getRightMostData();
     return data->key + data->piece.length;
