@@ -1,5 +1,24 @@
 #include "graphic.h"
 
+template<typename DrawCharFunc>
+void BufferView::drawCursor(const Vec2f& cursor_draw_pos, DrawCharFunc&& drawChar, const CharParams params)
+{
+    Rectangle cursor_rec = {
+	.x      = cursor_draw_pos.x,
+	.y      = cursor_draw_pos.y,
+	.width  = params.width,
+	.height = params.height
+    };
+
+    DrawRectangleRec(cursor_rec, WHITE);
+        
+    char c = buffer->getCharAt(cursor->getOffset());
+    if (c != '\n' && c != '\0') {
+	Vec2f temp_pos = cursor_draw_pos;
+	drawChar(c, temp_pos, BLACK);
+    }
+}
+
 template<typename DrawCharFunc, typename WrapFunc>
 void BufferView::drawOverlay(Vec2f& pos, Vec2f& cursor_draw_pos,
                              std::size_t offset_counter,
@@ -19,13 +38,9 @@ void BufferView::drawOverlay(Vec2f& pos, Vec2f& cursor_draw_pos,
 
 void BufferView::draw(const Font& font, const CharParams params)
 {
-    if (buffer->empty()) return;
-    assert(overlay_buf);
-
     Vec2f start_pos = { window_rect->x, window_rect->y };
     Vec2f draw_char_pos = start_pos;
     
-    // draw text
     auto drawChar = [&](char c, Vec2f& pos, Color color) {
 	if (c == '\n') {
 	    pos.x  = start_pos.x;
@@ -54,9 +69,15 @@ void BufferView::draw(const Font& font, const CharParams params)
 	}
 	return pos;
     };
-
-    Vec2f cursor_draw_pos = { 0.f, 0.f };
     
+    Vec2f cursor_draw_pos = { 0.f, 0.f };
+    assert(overlay_buf);
+    if (buffer->empty() && overlay_buf->empty()) {
+	drawCursor(cursor_draw_pos, drawChar, params);
+	return;
+    }
+    
+    // draw text    
     std::size_t line_count = buffer->getLineCount();
     std::size_t last_visible_line = view_port->first_visible_line + view_port->visible_lines;
 
@@ -92,20 +113,7 @@ void BufferView::draw(const Font& font, const CharParams params)
 	cursor_draw_pos = draw_char_pos;
     }
     
-    Rectangle cursor_rec = {
-	.x      = cursor_draw_pos.x,
-	.y      = cursor_draw_pos.y,
-	.width  = params.width,
-	.height = params.height
-    };
-
-    DrawRectangleRec(cursor_rec, WHITE);
-        
-    char c = buffer->getCharAt(cursor->getOffset());
-    if (c != '\n' && c != '\0') {
-	Vec2f temp_pos = cursor_draw_pos;
-	drawChar(c, temp_pos, BLACK);
-    }   
+    drawCursor(cursor_draw_pos, drawChar, params);
 }
 
 void Window::dumpOverlayBuffer()
@@ -131,7 +139,7 @@ void Window::handleNavigationOrActionKey(KeyInputTag key)
     dumpOverlayBuffer();
     switch (key) {
     case KeyInputTag::KIT_BACKSPACE:
-	// backspace();
+	backspaceOnCursor();
 	break;
     case KeyInputTag::KIT_ENTER:
 	newlineOnCursor();
@@ -223,19 +231,13 @@ void Window::moveCursorDown()
     }
 }
 
-void Window::backspaceOnCursor(LayoutTree& root_tree)
+void Window::backspaceOnCursor()
 {
-    // if (getBufferText().empty()) return;
-    // if (getCursorCol() > 0) {
-    // 	getBuffer().eraseCharAt(getCursorLine(), getCursorCol() - 1);
-    // 	getCursor().retreatCol();
-    // } else if (getCursorLine() > 0) {
-    //     std::size_t prev_line_size = getBufferText()[getCursorLine() - 1].first;
-    // 	getBuffer().appendLineTo(getCursorLine() - 1, getCursorLine());
-    // 	getBuffer().removeLine(getCursorLine());
-    // 	getCursor().setPosition(getCursorLine() - 1, prev_line_size);
-    // }
-    // recalculateCursor(root_tree, getCursorOffset(), getCursorOffset() - 1);
+    if (buffer->empty()) return;
+    if (cursor.getOffset() > 0) {
+	buffer->remove(cursor.getOffset() - 1, 1);
+	cursor.retreatOffset();
+    }
 }
 
 void Window::newlineOnCursor()

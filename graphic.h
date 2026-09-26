@@ -71,6 +71,8 @@ public:
 	, overlay_buf( ob )
 	, buffer( b )
     {}
+    template<typename DrawCharFunc>
+    void drawCursor(const Vec2f& cursor_draw_pos, DrawCharFunc&& drawChar, const CharParams params);
     template<typename DrawCharFunc, typename WrapFunc>
     void drawOverlay(Vec2f& pos, Vec2f& cursor_draw_pos,
 		     std::size_t offset_counter,
@@ -133,9 +135,8 @@ public:
     void moveCursorRight();
     void moveCursorUp();
     void moveCursorDown();
-    void backspaceOnCursor(LayoutTree& root_tree);
+    void backspaceOnCursor();
     void newlineOnCursor();
-    // void backspaceOnCursor();
     void scrollToCursor();
     
     void recalcViewPort(int char_width, int char_heigth);

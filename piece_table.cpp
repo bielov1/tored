@@ -14,6 +14,14 @@ void PieceTable::insert(std::size_t cursor_offset, const std::string& text)
     updateLineStartsOnInsert(cursor_offset, text);
     std::size_t add_buf_offset = add_buf.size();
     add_buf += text;
+    
+    if (pieces.empty()) {
+	pieces.insert(std::make_unique<Data>(Data{
+		    .key = 0,
+		    .piece = makePiece(SourceType::ADD, add_buf_offset, text.size())
+		}));
+	return;
+    }
 
     const auto& [piece, accum_piece_offset] = findPieceAt(cursor_offset);
     std::size_t offset_within_piece = cursor_offset < accum_piece_offset ? 0 : cursor_offset - accum_piece_offset;
@@ -70,6 +78,7 @@ void PieceTable::insert(std::size_t cursor_offset, const std::string& text)
 
 void PieceTable::remove(std::size_t cursor_offset, std::size_t length)
 {
+    if (pieces.empty()) return;
     // find all pieces that overlap [offset, offset + length)
     auto affected_pieces = findPiecesInRange(cursor_offset, cursor_offset + length);
     if (affected_pieces.empty()) return;
@@ -115,51 +124,6 @@ char PieceTable::getCharAt(std::size_t offset)
     }
 }
 
-// std::vector<std::string_view> PieceTable::getLineSlices(std::size_t line_idx,
-// 							const OverlayBuffer& overlay)
-// {
-//     if (line_idx >= line_starts.size()) return {};
-//     std::vector<std::string_view> views{};
-
-//     std::size_t buffer_length = getTotalLength();
-//     std::size_t line_start = line_starts[line_idx];
-//     std::size_t line_end   = (line_idx + 1 < line_starts.size()) ? line_starts[line_idx + 1] : buffer_length;
-
-//     std::size_t offset_within_line = line_start;
-//     while (offset_within_line < line_end) {
-// 	const auto& [piece, accum_piece_offset] = findPieceAt(offset_within_line);
-// 	const auto* base_buf = (piece.source == SourceType::ORIGINAL) ? original_buf.data() : add_buf.data();
-	
-// 	std::size_t piece_end_offset = accum_piece_offset + piece.length;
-// 	if (!overlay.empty() &&
-// 	    overlay.start_offset >= accum_piece_offset &&
-// 	    overlay.start_offset < piece_end_offset) {
-
-// 	    std::size_t split_point_in_piece = overlay.start_offset - accum_piece_offset;
-
-// 	    if (split_point_in_piece > 0) {
-// 		views.push_back(std::string_view{base_buf + piece.offset, split_point_in_piece});
-// 	    }
-
-// 	    views.push_back(std::string_view{overlay.text.data(), overlay.text.size()});
-
-// 	    if (piece.length > split_point_in_piece) {
-// 		views.push_back(std::string_view{base_buf + piece.offset + split_point_in_piece, piece.length - split_point_in_piece});
-// 	    }
-// 	} else {
-// 	    views.push_back(std::string_view{base_buf + piece.offset, piece.length});
-// 	}
-	
-// 	offset_within_line += piece.length;
-//     }
-    
-//     if (!overlay.empty() && overlay.start_offset == buffer_length && offset_within_line == buffer_length) {
-// 	views.push_back(std::string_view{overlay.text.data(), overlay.text.size()});
-//     }
-
-//     return views;
-// }
-
 std::vector<std::string_view> PieceTable::getLineSlices(std::size_t line_idx) noexcept
 {
     std::vector<std::string_view> views{};
@@ -200,6 +164,7 @@ std::size_t PieceTable::getLineCount() const
 
 std::size_t PieceTable::getTotalLength() const
 {
+    if (pieces.empty()) return 0;
     const auto* data = pieces.getRoot()->getRightMostData();
     return data->key + data->piece.length;
 }
@@ -224,7 +189,7 @@ LineCol PieceTable::offsetToLineCol(std::size_t offset) const
 
 bool PieceTable::empty() const
 {
-    return pieces.getRoot() ? false : true;
+    return pieces.empty();
 }
 
 void PieceTable::init(const std::string& text_buffer)
@@ -264,7 +229,9 @@ void PieceTable::replaceRange(const std::vector<const Data*>& affected,
     }
 
     pieces.decrementKeysAbove(range_start, delta);
-    pieces.insert(std::move(with_elems));   
+    if (!with_elems.empty()) {
+	pieces.insert(std::move(with_elems));
+    }
 }
 
 std::vector<std::size_t> PieceTable::findNewlineOffsets(std::string_view text) {

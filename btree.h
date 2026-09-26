@@ -57,7 +57,7 @@ namespace btree
 	    while (!cur->is_leaf) {
 		cur = cur->children[cur->keys_stored].get();
 	    }
-
+	    assert(cur->keys_stored > 0);
 	    const auto& last_data = cur->data[cur->keys_stored - 1];
 	    return last_data.get();
 	}
@@ -344,6 +344,11 @@ namespace btree
 	    : root( std::make_unique<Node<T,M>>() )
 	{}
 
+	bool empty() const
+	{
+	    return root->keys_stored == 0;
+	}
+
 	T* getRightMostPiece() const
 	{
 	    return root->getRightMostData();
@@ -411,7 +416,7 @@ namespace btree
 
 	    // for big diff between left_bound and right_bound
 	    // this operation can be pretty expensive
-	    while (start < right_bound + 1) {
+	    while (start < right_bound) {
 		const auto* p = findDataAt(start);
 		overlapped_pieces.push_back(p);
 		start = std::min(start, p->key) + p->piece.length;
