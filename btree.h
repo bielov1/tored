@@ -64,7 +64,7 @@ namespace btree
 
 	
 	template<typename ItemViewer>
-        void traverse(ItemViewer&& viewer)
+        void traverse(ItemViewer&& viewer) const
         {
             std::size_t i = 0;
             for (i = 0; i < keys_stored; ++i) {
@@ -183,7 +183,7 @@ namespace btree
 	    }
         }
 	
-        T* search(std::size_t k)
+        T* search(std::size_t k) const
         {   
 	    std::size_t i = 0;
             for (; i < keys_stored && k >= data[i]->key; ++i) {
@@ -355,7 +355,7 @@ namespace btree
 	}
 
 	template<typename ItemViewer>
-        void traverse(ItemViewer&& viewer)
+        void traverse(ItemViewer&& viewer) const
         {
             if (root) {
                 root->traverse(std::forward<ItemViewer>(viewer));
@@ -381,10 +381,8 @@ namespace btree
 	{
 	    if (root->keys_stored == M - 1) {
 		splitRoot();
-		root->insertNonFull(std::move(elem));
-	    } else {
-		root->insertNonFull(std::move(elem));
-	    }
+	    } 
+	    root->insertNonFull(std::move(elem));
 	}
 	
         void insert(std::vector<std::unique_ptr<T>> elems)
@@ -404,12 +402,12 @@ namespace btree
 	    root->shiftKeysAbove(threshold, delta, false);
 	}
 	
-	T* findDataAt(std::size_t k)
+	T* findDataAt(std::size_t k) const
         {
             return root->search(k);
         }
 
-	std::vector<const T*> findDataInRange(std::size_t left_bound, std::size_t right_bound)
+	std::vector<const T*> findDataInRange(std::size_t left_bound, std::size_t right_bound) const
 	{
 	    std::vector<const T*> overlapped_pieces{};
 	    std::size_t start = left_bound;

@@ -1,9 +1,46 @@
 #include <iostream>
 #include "tor.h"
 
+static std::shared_ptr<Window> createNewWindow(int window_width, int window_height,
+					       int char_height, int char_width,
+					       int scale)
+{
+    Rectangle window_rect = {
+	.x = 0.0f,
+	.y = 0.0f,
+	.width = static_cast<float>(window_width),
+	.height = static_cast<float>(window_height)
+    };
+    
+    ViewPort view_port = {
+	.first_visible_line = 0,
+	.first_visible_col  = 0,
+	.visible_lines = static_cast<std::size_t>(window_height / (char_height * scale)),
+	.visible_cols  = static_cast<std::size_t>(window_width / (char_width * scale))
+    };
+    
+    Cursor cursor{
+	CursorDrawType::Filled,
+	BufferOffset {
+	    .byte_offset = 0
+	}
+    };
+
+    auto new_window = std::make_shared<Window>(
+        window_rect,
+        view_port,
+        cursor,
+	OverlayBuffer{cursor.getOffset()},
+	std::make_shared<PieceTable>()
+    );
+    
+    new_window->attachBufferView();
+    return new_window;
+}
+
 Editor::Editor()
     : active_window( nullptr )
-    , root_tree{ Leaf{ 0, 0, nullptr } }
+    , windows_layout{ Leaf{ 0, 0, nullptr } }
     , max_scroll_line{ 1024 }
     , max_scroll_col{ 256 }
     , screen_width{ DEFAULT_SCREEN_WIDTH }
@@ -18,7 +55,7 @@ Editor::Editor()
 				    FONT_CHAR_HEIGHT, FONT_CHAR_WIDTH,
 				    FONT_SCALE);
     window_list.push_back(active_window);
-    root_tree = Leaf{
+    windows_layout = Leaf{
 	FONT_CHAR_WIDTH * FONT_SCALE,
 	FONT_CHAR_HEIGHT * FONT_SCALE,
 	active_window
@@ -32,63 +69,23 @@ Editor::~Editor()
 
 void Editor::handleKeyAction(KeyInputTag key)
 {
-    static_assert(KeyInputTag::__static_key_input_tag_count == 11);
+    static_assert(KeyInputTag::__static_key_input_tag_count == 6);
     if (!active_window) throw "active_window always assumed to be valid\n";
 
     active_window->handleNavigationOrActionKey(key);
 }
-
-// void Editor::backspace()
-// {
-//     if (!active_window) throw "backspace() always assumes active_window is valid\n";
-//     active_window->backspaceOnCursor(root_tree);
-// }
 
 void Editor::onResize(int new_screen_width, int new_screen_height)
 {
     if (!active_window) throw "onResize() always assumes active_window is valid\n";
     screen_width = new_screen_width;
     screen_height = new_screen_height;
-    recalculateLayout(root_tree, new_screen_width, new_screen_height);
+    recalculateLayout(new_screen_width, new_screen_height);
 }
 
 void Editor::refreshScreen()
 {
-    std::visit(RenderVisitor{font}, root_tree);
-}
-
-void Editor::switchActiveWindow()
-{
-    if (!active_window) throw "backspace() always assumes active_window is valid\n";
-    if (window_list.size() > 1) {
-	cycleNextWindow();
-	active_window->getCursor().setDrawType(CursorDrawType::Hollow);
-	active_window = window_list.front();
-	active_window->getCursor().setDrawType(CursorDrawType::Filled);
-    }
-}
-
-// IDEA: rather than pressing keys F2/F3 to split window,
-// in future we can print it in text like : main.c | Makefile
-// which will display main.c and Makefile buffers split vertically
-//
-// so, workflow can look like this
-//
-// tor.cpp
-// make -B && ./tor -> command to execute by hovering line with cursor and pressing ctrl-e
-// tor.h | graphic.h
-// graphic.cpp
-// tor.cpp | graphic.cpp -- graphic.h (-- means split horizontally)
-void Editor::splitActiveWindow(SplitType sp)
-{
-    if (!active_window) throw "splitScreen() always assumes active_window is valid\n";
-
-    std::shared_ptr<Window> new_window;
-    root_tree = splitWindow(std::move(root_tree), active_window, sp, new_window);
-    if (new_window) {
-	window_list.push_back(new_window);
-    }
-    recalculateLayout(root_tree, screen_width, screen_height);
+    std::visit(RenderVisitor{font}, windows_layout);
 }
 
 void Editor::saveToFile(const std::string& file_path)
@@ -165,18 +162,29 @@ Font Editor::loadPNGDataAsFont(std::span<const unsigned char> data, int cols, in
     return font;
 }
 
-void Editor::cycleNextWindow() 
+void Editor::recalculateLayout(int new_screen_width, int new_screen_height)
 {
-    if (window_list.size() <= 1) return;
-    window_list.splice(window_list.end(), window_list, window_list.begin());
+    Rectangle screen_bounds = {
+        .x = 0.0f,
+        .y = 0.0f,
+        .width = static_cast<float>(new_screen_width),
+        .height = static_cast<float>(new_screen_height)
+    };
+    std::visit(LayoutVisitor{ screen_bounds }, windows_layout);
 }
+
+// void Editor::cycleNextWindow() 
+// {
+//     if (window_list.size() <= 1) return;
+//     window_list.splice(window_list.end(), window_list, window_list.begin());
+// }
 
 void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) 
 {
     (void)window;
     (void)scancode;
     (void)mods;
-    static_assert(KeyInputTag::__static_key_input_tag_count == 11);
+    static_assert(KeyInputTag::__static_key_input_tag_count == 6);
     if (key == GLFW_KEY_BACKSPACE && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
 	Editor::getInstance().handleKeyAction(KeyInputTag::KIT_BACKSPACE);
     }
@@ -195,22 +203,6 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
     if (key == GLFW_KEY_DOWN && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
         Editor::getInstance().handleKeyAction(KeyInputTag::KIT_DOWN);
     }
-    if (key == GLFW_KEY_F1 && action == GLFW_PRESS) {
-        Editor::getInstance().handleKeyAction(KeyInputTag::KIT_F1);
-    }
-    if (key == GLFW_KEY_F2 && action == GLFW_PRESS) {
-        Editor::getInstance().handleKeyAction(KeyInputTag::KIT_F2);
-    }
-    if (key == GLFW_KEY_F3 && action == GLFW_PRESS) {
-        Editor::getInstance().handleKeyAction(KeyInputTag::KIT_F3);
-    }
-    if (key == GLFW_KEY_F4 && action == GLFW_PRESS) {
-        Editor::getInstance().handleKeyAction(KeyInputTag::KIT_F4);
-    }
-    if (key == GLFW_KEY_F5 && action == GLFW_PRESS) {
-        Editor::getInstance().handleKeyAction(KeyInputTag::KIT_F5);
-    }
-    
 }
 
 void charCallback(GLFWwindow* window, unsigned int codepoint)
@@ -228,11 +220,6 @@ void customWindowSizeCallback(GLFWwindow* window, int new_width, int new_height)
     rlViewport(0, 0, new_width, new_height);
     Editor::getInstance().onResize(new_width, new_height);
 }
-
-// TODO: [DONE] adjust screen on run time
-// TODO: [DONE] render visible line to distinguish window bounds on splitted screen
-// TODO: implement close and switch active window
-// TODO: [DONE] switch between opened windows
 
 int main()
 {

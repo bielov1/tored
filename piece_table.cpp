@@ -1,9 +1,19 @@
 #include "piece_table.h"
 
-PieceTable::PieceTable(const std::string& text_buffer)
+static Piece makePiece(SourceType type, std::size_t offset, std::size_t len)
+{
+    Piece piece = {
+	.source = type,
+	.offset = offset,
+	.length = len
+    };
+    return piece;
+}
+
+PieceTable::PieceTable(const std::string text_buffer)
     : original_buf{ text_buffer }
     , add_buf{ "" }
-    , line_starts{}
+    , line_starts{ 0 }
     , pieces{}
 {
     init(text_buffer);
@@ -112,7 +122,7 @@ void PieceTable::remove(std::size_t cursor_offset, std::size_t length)
     replaceRange(affected_pieces, std::move(new_pieces), cursor_offset, length);
 }
 
-char PieceTable::getCharAt(std::size_t offset)
+char PieceTable::getCharAt(std::size_t offset) const
 {
     if (offset == getTotalLength()) return '\0';
     const auto& [piece, accum_piece_offset] = findPieceAt(offset);
@@ -124,7 +134,7 @@ char PieceTable::getCharAt(std::size_t offset)
     }
 }
 
-std::vector<std::string_view> PieceTable::getLineSlices(std::size_t line_idx) noexcept
+std::vector<std::string_view> PieceTable::getLineSlices(std::size_t line_idx) const noexcept
 {
     std::vector<std::string_view> views{};
 
@@ -203,8 +213,6 @@ void PieceTable::init(const std::string& text_buffer)
         .piece = makePiece(SourceType::ORIGINAL, 0, text_buffer.size())
     });
     pieces.insert(std::move(initial_piece));
-
-    line_starts.push_back(0);
     updateLineStartsOnInsert(0, text_buffer);
 }
 
@@ -288,7 +296,7 @@ void PieceTable::updateLineStartsOnRemove(std::size_t remove_offset, std::size_t
     }
 }
 
-std::pair<const Piece, std::size_t> PieceTable::findPieceAt(std::size_t cur_offset)
+std::pair<const Piece, std::size_t> PieceTable::findPieceAt(std::size_t cur_offset) const
 {
     const auto* data = pieces.findDataAt(cur_offset);
 
@@ -300,7 +308,7 @@ std::pair<const Piece, std::size_t> PieceTable::findPieceAt(std::size_t cur_offs
 }
 
 std::vector<const Data*> PieceTable::findPiecesInRange(std::size_t left_bound,
-							std::size_t right_bound)
+							std::size_t right_bound) const
 {
     return pieces.findDataInRange(left_bound, right_bound);
 }
