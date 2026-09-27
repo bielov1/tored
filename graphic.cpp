@@ -156,22 +156,6 @@ void Window::handleNavigationOrActionKey(KeyInputTag key)
     case KeyInputTag::KIT_DOWN:
 	moveCursorDown();
 	break;
-    case KeyInputTag::KIT_F1:
-	//switchActiveWindow();
-	break;    
-    case KeyInputTag::KIT_F2:
-	//splitActiveWindow(SplitType::Horizontal);
-	break;
-    case KeyInputTag::KIT_F3:
-	//splitActiveWindow(SplitType::Vertical);
-	break;
-    case KeyInputTag::KIT_F4:
-	//closeAndSwitchActiveWindow();
-	break;
-	// case GLFW_KEY_F5:
-	// 	std::fprintf(stdout, "F5 was pressed\n");
-	// 	saveToFile(std::string{"output"});
-	// 	break;
     default:
 	std::fprintf(stderr, "[WARNING] uknown key input\n");
     }
@@ -206,14 +190,22 @@ void Window::moveCursorUp()
 {
     if (buffer->empty()) return;
     LineCol cursor_lc = buffer->offsetToLineCol(cursor.getOffset());
+    std::size_t offset_within_curr_line = cursor_lc.col;
+    std::size_t curr_line_start = buffer->getLineStart(cursor_lc.line);
 
-    if (cursor_lc.line > 0) {
-	std::size_t offset_within_curr_line = cursor_lc.col;
+    assert(view_port.visible_cols > 0);
+    std::size_t visual_cols = offset_within_curr_line % view_port.visible_cols;
+
+    if (offset_within_curr_line >= view_port.visible_cols) {
+	cursor.setOffset(curr_line_start + offset_within_curr_line - view_port.visible_cols);
+    } else if (cursor_lc.line > 0) {
 	std::size_t prev_line_start = buffer->getLineStart(cursor_lc.line - 1);
 	std::size_t prev_line_end   = buffer->getLineEnd(cursor_lc.line - 1);
 	std::size_t prev_line_size  = prev_line_end - prev_line_start;
-	std::size_t offset_within_prev_line = offset_within_curr_line < prev_line_size ? offset_within_curr_line : prev_line_size;
-	cursor.setOffset(prev_line_start + offset_within_prev_line);
+
+	std::size_t wrapped_lines_count = static_cast<std::size_t>(prev_line_size / view_port.visible_cols);
+	std::size_t new_offset = std::min(visual_cols + view_port.visible_cols * wrapped_lines_count, prev_line_size);
+	cursor.setOffset(prev_line_start + new_offset);	    
     }
 }
 
@@ -221,12 +213,24 @@ void Window::moveCursorDown()
 {
     if (buffer->empty()) return;
     LineCol cursor_lc = buffer->offsetToLineCol(cursor.getOffset());
-    if (cursor_lc.line + 1 < buffer->getLineCount()) {
-	std::size_t offset_within_curr_line = cursor_lc.col;
+    std::size_t offset_within_curr_line = cursor_lc.col;
+    std::size_t curr_line_start = buffer->getLineStart(cursor_lc.line);
+    std::size_t curr_line_end   = buffer->getLineEnd(cursor_lc.line);
+    std::size_t curr_line_size  = curr_line_end - curr_line_start;
+
+    assert(view_port.visible_cols > 0);
+    std::size_t visual_cols = offset_within_curr_line % view_port.visible_cols;
+    
+    if (offset_within_curr_line + view_port.visible_cols < curr_line_size) {
+	std::size_t new_offset_within_curr_line = std::min(offset_within_curr_line + view_port.visible_cols, curr_line_size);
+	cursor.setOffset(curr_line_start + new_offset_within_curr_line);
+    } else if ((curr_line_size - offset_within_curr_line) + visual_cols >= view_port.visible_cols) {
+	cursor.setOffset(curr_line_start + curr_line_size);
+    } else if (cursor_lc.line + 1 < buffer->getLineCount()) {   
 	std::size_t next_line_start = buffer->getLineStart(cursor_lc.line + 1);
 	std::size_t next_line_end   = buffer->getLineEnd(cursor_lc.line + 1);
 	std::size_t next_line_size  = next_line_end - next_line_start;
-	std::size_t offset_within_next_line = offset_within_curr_line < next_line_size ? offset_within_curr_line : next_line_size;
+	std::size_t offset_within_next_line = std::min(visual_cols, next_line_size);
 	cursor.setOffset(next_line_start + offset_within_next_line);
     }
 }
