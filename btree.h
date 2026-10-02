@@ -391,6 +391,16 @@ namespace btree
 		insert(std::move(e));
 	    }
 	}
+       
+	const std::unique_ptr<Node<T,M>>& getRoot() const
+	{
+	    return root;
+	}
+
+	T* findDataAt(std::size_t k) const
+        {
+            return root->search(k);
+        }
 
 	void incrementKeysAbove(std::size_t threshold, std::size_t delta)
 	{
@@ -402,11 +412,6 @@ namespace btree
 	    root->shiftKeysAbove(threshold, delta, false);
 	}
 	
-	T* findDataAt(std::size_t k) const
-        {
-            return root->search(k);
-        }
-
 	std::vector<const T*> findDataInRange(std::size_t left_bound, std::size_t right_bound) const
 	{
 	    std::vector<const T*> overlapped_pieces{};
@@ -420,13 +425,7 @@ namespace btree
 		start = std::min(start, p->key) + p->piece.length;
 	    }
 	    return overlapped_pieces;
-	}
-
-	const std::unique_ptr<Node<T,M>>& getRoot() const
-	{
-	    return root;
-	}
-	
+	}	
     private:
 	void splitRoot()
         {

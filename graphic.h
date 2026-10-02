@@ -5,6 +5,7 @@
 #include <cassert>
 #include <vector>
 #include <ranges>
+#include <fstream>
 #include <algorithm>
 
 #include "raylib.h"
@@ -31,9 +32,8 @@ struct CharParams
     float height;
 };
 
-enum class SplitType;
+// ============================================================================
 struct OverlayBuffer;
-
 class Graphic
 {
 public:
@@ -78,10 +78,6 @@ public:
 		     DrawCharFunc&& drawChar,
 		     WrapFunc&& getWrappedPos);
     void draw(const Font& font, const CharParams params) override;
-    // CursorDrawType getCursorDrawType() { return cursor->getDrawType(); }
-    // std::size_t getCursorLine() { return cursor->getLine(); }
-    // std::size_t getCursorCol() { return cursor->getCol(); }
-
 private:
     Rectangle *window_rect;
     ViewPort *view_port;
@@ -90,21 +86,14 @@ private:
     IBuffer *buffer;
 };
 
-struct Leaf;
-struct Node;
-using LayoutTree = std::variant<
-    Leaf,
-    std::unique_ptr<Node>
-    >;
-
-class Window : public Graphic // add Observer that changes font on update()
+class Window : public Graphic
 {
 public:
     Window(Rectangle r,
 	   ViewPort vp,
 	   Cursor c,
 	   OverlayBuffer ob,
-	   std::shared_ptr<IBuffer> b)
+	   std::unique_ptr<IBuffer> b)
         : rect{ r }
 	, view_port{ vp }
         , cursor{ c }
@@ -113,7 +102,6 @@ public:
     {}
     
     ~Window() override = default;
-
     void draw(const Font& font, const CharParams params) override {	
         for (auto& child : graphics) {
 	    // lazy dump overlay buffer
@@ -137,18 +125,22 @@ public:
     void backspaceOnCursor();
     void newlineOnCursor();
     void scrollToCursor();
+
+    void loadFile(const char *file_path);
     
     void recalcViewPort(int char_width, int char_heigth);
     void attachBufferView();
-    void setRect(const Rectangle& new_rect) { rect = new_rect; }    
+    void setRect(const Rectangle& new_rect) { rect = new_rect; }
+    
  private:
+    std::size_t lineSize(std::size_t line) const;
+	
     std::vector<std::shared_ptr<Graphic>> graphics;
-
     Rectangle rect;
     ViewPort view_port;
     Cursor cursor;
     OverlayBuffer overlay_buf;
-    std::shared_ptr<IBuffer> buffer;
+    std::unique_ptr<IBuffer> buffer;
 };
 
 // ============================================================================

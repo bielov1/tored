@@ -13,7 +13,7 @@ void BufferView::drawCursor(const Vec2f& cursor_draw_pos, DrawCharFunc&& drawCha
     DrawRectangleRec(cursor_rec, WHITE);
         
     char c = buffer->getCharAt(cursor->getOffset());
-    if (c != '\n' && c != '\0') {
+    if (c != '\n' && c != '\t' && c != '\0') {
 	Vec2f temp_pos = cursor_draw_pos;
 	drawChar(c, temp_pos, BLACK);
     }
@@ -46,7 +46,11 @@ void BufferView::draw(const Font& font, const CharParams params)
 	    pos.x  = start_pos.x;
 	    pos.y += params.height;
 	    return;
+	} else if (c == '\t') {
+	    pos.x += params.width * 4;
+	    return;
 	}
+	
 	int idx = GetGlyphIndex(font, c);
 	if (idx >= 0 && idx < font.glyphCount) {
 	    Rectangle src = font.recs[idx];
@@ -86,7 +90,8 @@ void BufferView::draw(const Font& font, const CharParams params)
 	auto line_slices = buffer->getLineSlices(i);
 	if (line_slices.empty()) break;
 	for (const auto& slice : line_slices) {
-	    for (const auto& c : slice) {		
+	    for (const auto& c : slice) {
+		if (c == '\0') break;
 		if (!overlay_buf->empty() && offset_counter == overlay_buf->start_offset) {
 		    drawOverlay(draw_char_pos, cursor_draw_pos, offset_counter, drawChar, getWrappedPos);
 		}
@@ -115,6 +120,7 @@ void BufferView::draw(const Font& font, const CharParams params)
     
     drawCursor(cursor_draw_pos, drawChar, params);
 }
+// ===============================================================================
 
 void Window::dumpOverlayBuffer()
 {
@@ -170,6 +176,12 @@ void Window::handleNavigationOrActionKey(KeyInputTag key)
 //     // }   
 // }
 
+std::size_t Window::lineSize(std::size_t line) const
+{
+    return buffer->getLineEnd(line) - buffer->getLineStart(line);
+}
+
+
 void Window::moveCursorLeft()
 {
     if (buffer->empty()) return;
@@ -189,71 +201,44 @@ void Window::moveCursorRight()
 void Window::moveCursorUp()
 {
     if (buffer->empty()) return;
-    LineCol cursor_lc = buffer->offsetToLineCol(cursor.getOffset());
-    std::size_t offset_within_curr_line = cursor_lc.col;
-    std::size_t curr_line_start = buffer->getLineStart(cursor_lc.line);
-    std::size_t curr_line_end   = buffer->getLineEnd(cursor_lc.line);
-    std::size_t curr_line_size  = curr_line_end - curr_line_start;
-    
-    assert(view_port.visible_cols > 0);
-    std::size_t visual_cols = 0;
-    // check for case when line text is big as visible_cols
-    if (offset_within_curr_line == view_port.visible_cols &&
-	curr_line_size == view_port.visible_cols) {
-	// line has same size as visible_cols
-	visual_cols = offset_within_curr_line;
-    } else {
-	// find visual offset of current line
-	visual_cols = offset_within_curr_line % view_port.visible_cols;
-    } 
-	
-    
-    if (offset_within_curr_line >= view_port.visible_cols &&
-	curr_line_size != view_port.visible_cols) {
-	cursor.setOffset(curr_line_start + offset_within_curr_line - view_port.visible_cols);
-    } else if (cursor_lc.line > 0) {
-	std::size_t prev_line_start = buffer->getLineStart(cursor_lc.line - 1);
-	std::size_t prev_line_end   = buffer->getLineEnd(cursor_lc.line - 1);
-	std::size_t prev_line_size  = prev_line_end - prev_line_start;
-	std::size_t wrapped_lines_count = 0;
-	if (prev_line_size != view_port.visible_cols) {
-	    wrapped_lines_count= static_cast<std::size_t>(prev_line_size / view_port.visible_cols);
-	}
-	std::size_t new_offset = std::min(visual_cols + view_port.visible_cols * wrapped_lines_count, prev_line_size);
-	cursor.setOffset(prev_line_start + new_offset);
+    auto [line, col] = buffer->offsetToLineCol(cursor.getOffset());
+    std::size_t width = view_port.visible_cols;
 
+    std::size_t row = col / width;
+    std::size_t norm_col = col % width;
+
+    if (row > 0) {
+	std::size_t new_col_within_line = (row - 1) * width + norm_col;
+	cursor.setOffset(buffer->getLineStart(line) + new_col_within_line);
+    } else if (line > 0) {
+	std::size_t prev_line_size = lineSize(line - 1);
+	std::size_t last_row  = prev_line_size / width;
+	std::size_t col_within_prev_line = std::min(prev_line_size, last_row * width + norm_col);
+	cursor.setOffset(buffer->getLineStart(line - 1) + col_within_prev_line);
     }
 }
 
 void Window::moveCursorDown()
 {
     if (buffer->empty()) return;
-    LineCol cursor_lc = buffer->offsetToLineCol(cursor.getOffset());
-    std::size_t offset_within_curr_line = cursor_lc.col;
-    std::size_t curr_line_start = buffer->getLineStart(cursor_lc.line);
-    std::size_t curr_line_end   = buffer->getLineEnd(cursor_lc.line);
-    std::size_t curr_line_size  = curr_line_end - curr_line_start;
+    // include <iostream>int main(){    while (true) {\n\tstatic int count = 0;\n
+    //  | cursor pos                       | view_cols
+    // to go to the next line from current cursor position,
+    auto [line, col] = buffer->offsetToLineCol(cursor.getOffset());
+    std::size_t width = view_port.visible_cols;
+    std::size_t line_size = lineSize(line);
 
-    assert(view_port.visible_cols > 0);
-    std::size_t visual_cols = 0;
-    if (offset_within_curr_line == view_port.visible_cols &&
-	curr_line_size == view_port.visible_cols) {
-	visual_cols = offset_within_curr_line;
-    } else {
-	visual_cols = offset_within_curr_line % view_port.visible_cols;
-    } 
-    
-    if (offset_within_curr_line + view_port.visible_cols < curr_line_size) {
-	std::size_t new_offset_within_curr_line = std::min(offset_within_curr_line + view_port.visible_cols, curr_line_size);
-	cursor.setOffset(curr_line_start + new_offset_within_curr_line);
-    } else if ((curr_line_size - offset_within_curr_line) + visual_cols > view_port.visible_cols) {
-	cursor.setOffset(curr_line_start + curr_line_size);
-    } else if (cursor_lc.line + 1 < buffer->getLineCount()) {   
-	std::size_t next_line_start = buffer->getLineStart(cursor_lc.line + 1);
-	std::size_t next_line_end   = buffer->getLineEnd(cursor_lc.line + 1);
-	std::size_t next_line_size  = next_line_end - next_line_start;
-	std::size_t offset_within_next_line = std::min(visual_cols, next_line_size);
-	cursor.setOffset(next_line_start + offset_within_next_line);
+    std::size_t row = col / width;
+    std::size_t last_row = line_size / width;
+    std::size_t norm_col = col % width;
+
+    if (row < last_row) {
+	// same logical line
+	std::size_t new_col_within_line = std::min(line_size, (row + 1) * width + norm_col);
+	cursor.setOffset(buffer->getLineStart(line) + new_col_within_line);
+    } else if (line + 1 < buffer->getLineCount()) {
+	std::size_t col_within_next_line = std::min(lineSize(line + 1), norm_col);
+	cursor.setOffset(buffer->getLineStart(line + 1) + col_within_next_line);  
     }
 }
 
@@ -284,6 +269,21 @@ void Window::scrollToCursor()
     }
 }
 
+void Window::loadFile(const char *file_path)
+{
+    std::ifstream ifs{file_path, std::ios_base::binary | std::ios_base::ate};
+    if (!ifs.good()) {
+	std::println("Unable to open {}", file_path);
+	return;
+    }
+    std::size_t file_size = ifs.tellg();
+    std::string content(file_size, '\0');
+    ifs.seekg(0, std::ios::beg);
+    ifs.read(content.data(), file_size);
+    std::println("{}", content);
+    buffer->init(std::move(content));
+}
+
 void Window::recalcViewPort(int char_width, int char_height)
 {
     assert(char_width > 0);
@@ -300,3 +300,4 @@ void Window::attachBufferView()
     auto view = std::make_shared<BufferView>(&rect, &view_port, &cursor, &overlay_buf, buffer.get());
     add(view);
 }
+// ===============================================================================

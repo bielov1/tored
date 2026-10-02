@@ -16,6 +16,7 @@ class IBuffer
 public:
     IBuffer() = default;
     virtual ~IBuffer() = default;
+    virtual void init(std::string&& text) = 0;
     virtual void insert(std::size_t offset, const std::string& text) = 0;
     virtual void remove(std::size_t offset, std::size_t length) = 0;
     virtual char getCharAt(std::size_t offset) const = 0;
@@ -78,9 +79,10 @@ struct LineCol
 class PieceTable : public IBuffer
 {
 public:
-    PieceTable(const std::string text_buffer = "");
+    PieceTable(std::string&& text_buffer = "");
     ~PieceTable() = default;
 
+    void init(std::string&& text) override final;
     void insert(std::size_t offset, const std::string& text) override final;
     void remove(std::size_t offset, std::size_t length) override final;
     char getCharAt(std::size_t offset) const override final;
@@ -101,7 +103,6 @@ public:
     // void splitLineAt(std::size_t cursor_line, std::size_t cursor_col);
     
 private:
-    void init(const std::string& text_buffer);
     void replace(std::size_t piece_with_key,
 		 std::vector<std::unique_ptr<Data>> with_elems,
 		 std::size_t delta);
@@ -119,10 +120,9 @@ private:
     std::size_t pieceEnd(const Data& d) const { return d.key + d.piece.length; }
     
     static constexpr std::size_t M = 4;
+    using BufferOffset = std::size_t;
     std::string original_buf;
     std::string add_buf;
-    
-    using BufferOffset = std::size_t;
     std::vector<BufferOffset> line_starts;
     btree::BTree<Data, M> pieces;
 };

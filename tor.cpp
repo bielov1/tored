@@ -1,48 +1,10 @@
 #include <iostream>
 #include "tor.h"
 
-static std::shared_ptr<Window> createNewWindow(int window_width, int window_height,
-					       int char_height, int char_width,
-					       int scale)
-{
-    Rectangle window_rect = {
-	.x = 0.0f,
-	.y = 0.0f,
-	.width = static_cast<float>(window_width),
-	.height = static_cast<float>(window_height)
-    };
-    
-    ViewPort view_port = {
-	.first_visible_line = 0,
-	.first_visible_col  = 0,
-	.visible_lines = static_cast<std::size_t>(window_height / (char_height * scale)),
-	.visible_cols  = static_cast<std::size_t>(window_width / (char_width * scale))
-    };
-    
-    Cursor cursor{
-	CursorDrawType::Filled,
-	BufferOffset {
-	    .byte_offset = 0
-	}
-    };
-
-    auto new_window = std::make_shared<Window>(
-        window_rect,
-        view_port,
-        cursor,
-	OverlayBuffer{cursor.getOffset()},
-	std::make_shared<PieceTable>()
-    );
-    
-    new_window->attachBufferView();
-    return new_window;
-}
-
 Editor::Editor()
-    : active_window( nullptr )
-    , windows_layout{ Leaf{ 0, 0, nullptr } }
-    , max_scroll_line{ 1024 }
-    , max_scroll_col{ 256 }
+    : windows{}
+    , active_window( nullptr )
+    , windows_layout{ layout_tree::Leaf{ 0, 0, nullptr } }
     , screen_width{ DEFAULT_SCREEN_WIDTH }
     , screen_height{ DEFAULT_SCREEN_HEIGHT }
     , font{}
@@ -54,11 +16,11 @@ Editor::Editor()
     active_window = createNewWindow(screen_width, screen_height,
 				    FONT_CHAR_HEIGHT, FONT_CHAR_WIDTH,
 				    FONT_SCALE);
-    window_list.push_back(active_window);
-    windows_layout = Leaf{
+    windows.push_back(active_window);
+    windows_layout = layout_tree::Leaf{
 	FONT_CHAR_WIDTH * FONT_SCALE,
 	FONT_CHAR_HEIGHT * FONT_SCALE,
-	active_window
+	active_window.get()
     };
 }
 
@@ -70,48 +32,53 @@ Editor::~Editor()
 void Editor::handleKeyAction(KeyInputTag key)
 {
     static_assert(KeyInputTag::__static_key_input_tag_count == 6);
-    if (!active_window) throw "active_window always assumed to be valid\n";
+    if (!active_window) return;
 
     active_window->handleNavigationOrActionKey(key);
 }
 
 void Editor::onResize(int new_screen_width, int new_screen_height)
 {
-    if (!active_window) throw "onResize() always assumes active_window is valid\n";
+    if (!active_window) return;
     screen_width = new_screen_width;
     screen_height = new_screen_height;
     recalculateLayout(new_screen_width, new_screen_height);
 }
 
-void Editor::refreshScreen()
+void Editor::recalculateLayout(int new_screen_width, int new_screen_height)
+{
+    Rectangle screen_bounds = {
+        .x = 0.0f,
+        .y = 0.0f,
+        .width = static_cast<float>(new_screen_width),
+        .height = static_cast<float>(new_screen_height)
+    };
+    std::visit(LayoutVisitor{ screen_bounds }, windows_layout);
+}
+
+void Editor::render()
 {
     std::visit(RenderVisitor{font}, windows_layout);
 }
 
-void Editor::saveToFile(const std::string& file_path)
+void Editor::saveToFile(const char *file_path)
 {
     (void)file_path;
     assert(false && "saveToFile() is not implemented yet\n");
 }
 
-// void Editor::loadFromFile(const std::string& file_path)
-// {
-//     assert(buffer.size() == 0 && "Buffer should be empty.");
-//     std::ifstream ifs{file_path, std::ios_base::binary | std::ios_base::ate};
-//     if (!ifs) throw std::runtime_error("Failed to open file: " + file_path);
-
-//     std::string content(ifs.tellg(), '\0');
-//     ifs.seekg(0, std::ios::beg);
-//     ifs.read(content.data(), content.size());
-
-//     buffer = content 
-//            | std::views::split('\n')
-//            | std::views::transform([](auto&& range) {
-//                  std::string_view sv{range.begin(), range.end()};
-//                  return TextLine{ sv.size(), std::string(sv) };
-//              })
-//            | std::ranges::to<Buffer>();
-// }
+void Editor::loadFromFile(const char *file_path)
+{
+    auto new_window = createNewWindow(screen_width, screen_height,
+				      FONT_CHAR_HEIGHT, FONT_CHAR_WIDTH,
+				      FONT_SCALE);
+    if (new_window) {
+	new_window->loadFile(file_path);
+	std::get<layout_tree::Leaf>(windows_layout).window = new_window.get();
+	active_window = new_window;
+	windows.push_back(std::move(new_window));
+    }
+}
 
 Font Editor::loadPNGDataAsFont(std::span<const unsigned char> data, int cols, int rows)
 {
@@ -162,17 +129,6 @@ Font Editor::loadPNGDataAsFont(std::span<const unsigned char> data, int cols, in
     return font;
 }
 
-void Editor::recalculateLayout(int new_screen_width, int new_screen_height)
-{
-    Rectangle screen_bounds = {
-        .x = 0.0f,
-        .y = 0.0f,
-        .width = static_cast<float>(new_screen_width),
-        .height = static_cast<float>(new_screen_height)
-    };
-    std::visit(LayoutVisitor{ screen_bounds }, windows_layout);
-}
-
 // void Editor::cycleNextWindow() 
 // {
 //     if (window_list.size() <= 1) return;
@@ -221,7 +177,7 @@ void customWindowSizeCallback(GLFWwindow* window, int new_width, int new_height)
     Editor::getInstance().onResize(new_width, new_height);
 }
 
-int main()
+int main(int argc, char *argv[])
 {
     InitWindow(DEFAULT_SCREEN_WIDTH, DEFAULT_SCREEN_HEIGHT, "");
     
@@ -233,14 +189,15 @@ int main()
     SetTargetFPS(60);
     
     Editor& editor = Editor::getInstance();
-
-    // std::string load_file_name = "la.cpp";
-    // editor.loadFromFile(load_file_name);
+    
+    if (argc > 1) {
+	editor.loadFromFile(argv[1]);
+    }
 
     while (!WindowShouldClose()) {
 	BeginDrawing();
 	ClearBackground(Color{ 0x18, 0x18, 0x18, 0x0 });
-	editor.refreshScreen();
+	editor.render();
         EndDrawing();
     }
     

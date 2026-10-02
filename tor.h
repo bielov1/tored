@@ -2,7 +2,6 @@
 
 #include <print>
 #include <cstdio>
-#include <fstream>
 #include <list>
 
 #include <string_view>
@@ -37,68 +36,96 @@ constexpr bool operator==(KeyInputTag kit, int i) {
     return static_cast<std::underlying_type_t<KeyInputTag>>(kit) == i;
 }
 
-enum class SplitType { Horizontal, Vertical };
-struct Leaf
+static std::shared_ptr<Window> createNewWindow(int window_width, int window_height,
+					       int char_height, int char_width,
+					       int scale)
 {
-    Leaf(int cw, int ch, std::shared_ptr<Window> win)
-	: char_width{ cw }
-	, char_height{ ch }
-	, window( win )
-    {}
-    int char_width;
-    int char_height;
-    std::shared_ptr<Window> window;
-};
-
-struct Node
-{
-    Node(SplitType st, float rat, LayoutTree l, LayoutTree r)
-	: split_type{st}
-	, ratio{rat}
-	, left(std::move(l))
-	, right(std::move(r))
-    {}
+    int scaled_char_width = char_width * scale;
+    int scaled_char_height = char_height * scale;
     
-    SplitType split_type;
-    float ratio;
-    LayoutTree left;
-    LayoutTree right;
-};
+    Rectangle window_rect = {
+	.x = 0.0f,
+	.y = 0.0f,
+	.width = static_cast<float>(window_width),
+	.height = static_cast<float>(window_height)
+    };
+    
+    ViewPort view_port = {
+	.first_visible_line = 0,
+	.first_visible_col  = 0,
+	.visible_lines = static_cast<std::size_t>(window_height / scaled_char_height),
+	.visible_cols  = static_cast<std::size_t>(window_width / scaled_char_width)
+    };
+    
+    Cursor cursor{
+	CursorDrawType::Filled,
+	BufferOffset {
+	    .byte_offset = 0
+	}
+    };
 
-struct RenderVisitor
-{
-    Font font;
+    auto new_window = std::make_shared<Window>(
+        window_rect,
+        view_port,
+        cursor,
+	OverlayBuffer{cursor.getOffset()},
+	std::make_unique<PieceTable>()
+    );
+    
+    new_window->attachBufferView();
+    return new_window;
+}
 
-    void operator()(const Leaf& leaf) const {
+enum class SplitType { Horizontal, Vertical };
+
+namespace layout_tree {
+    struct Leaf
+    {
+	Leaf(int cw, int ch, Window* win)
+	    : char_width{ cw }
+	    , char_height{ ch }
+	    , window( win )
+	{}
 	
-        if (leaf.window) {
-            leaf.window->draw(font, CharParams{
-		    .width  = static_cast<float>(leaf.char_width),
-		    .height = static_cast<float>(leaf.char_height)
-		});
-        }
-    }
+	int char_width;
+	int char_height;
+	Window* window;
+    };
 
-    void operator()(const std::unique_ptr<Node>& node) const {
-        if (node) {
-            std::visit(*this, node->left);
-            std::visit(*this, node->right);
-        }
-    }
-};
+    struct Node;
+    using LayoutTree = std::variant<
+	Leaf,
+	std::unique_ptr<Node>
+	>;
+
+    struct Node
+    {
+	Node(SplitType st, float rat, LayoutTree l, LayoutTree r)
+	    : split_type{st}
+	    , ratio{rat}
+	    , left(std::move(l))
+	    , right(std::move(r))
+	{}
+    
+	SplitType split_type;
+	float ratio;
+	LayoutTree left;
+	LayoutTree right;
+    };
+}
 
 struct LayoutVisitor
 {
     Rectangle current_bounds;
     
-    void operator()(Leaf& leaf)
+    void operator()(layout_tree::Leaf& leaf)
     {
 	leaf.window->setRect(current_bounds);
 	leaf.window->recalcViewPort(leaf.char_width, leaf.char_height);
 	leaf.window->scrollToCursor();
     }
 
-    void operator()(std::unique_ptr<Node>& node)
+    void operator()(std::unique_ptr<layout_tree::Node>& node)
     {
 	if (!node) return;
 
@@ -146,6 +173,28 @@ struct LayoutVisitor
     }
 };
 
+struct RenderVisitor
+{
+    Font font;
+
+    void operator()(const layout_tree::Leaf& leaf) const {
+	
+	if (leaf.window) {
+	    leaf.window->draw(font, CharParams{
+		    .width  = static_cast<float>(leaf.char_width),
+		    .height = static_cast<float>(leaf.char_height)
+		});
+	}
+    }
+
+    void operator()(const std::unique_ptr<layout_tree::Node>& node) const {
+	if (node) {
+	    std::visit(*this, node->left);
+	    std::visit(*this, node->right);
+	}
+    }
+};
+
 class Editor
 {
 public:
@@ -157,16 +206,15 @@ public:
 
     void handleKeyAction(KeyInputTag key);
     void onResize(int new_window_width, int new_window_height);
-    void refreshScreen();
-    void saveToFile(const std::string& file_path);
-    void loadFromFile(const std::string& file_path);
-    Font loadPNGDataAsFont(std::span<const unsigned char> data, int cols, int rows);
-
     void recalculateLayout(int new_screen_width, int new_screen_height);
+    void render();
+    void saveToFile(const char *file_path);
+    void loadFromFile(const char *file_path);
+    Font loadPNGDataAsFont(std::span<const unsigned char> data, int cols, int rows);
     
     // void cycleNextWindow();
     // void cyclePreviousWindow();
-    const std::shared_ptr<Window>& getActiveWindow() const { return active_window; }
+    Window* getActiveWindow() { return active_window.get(); }
     // void setActiveWindow(std::shared_ptr<Window> new_active_window) { active_window = new_active_window; }
     
     Editor(const Editor&) = delete;
@@ -176,11 +224,9 @@ private:
     ~Editor();
 
     // switch to linked list or deque
-    std::list<std::shared_ptr<Window>> window_list;
+    std::vector<std::shared_ptr<Window>> windows;
     std::shared_ptr<Window> active_window;
-    LayoutTree windows_layout;
-    std::size_t max_scroll_line;
-    std::size_t max_scroll_col;
+    layout_tree::LayoutTree windows_layout;
     int screen_width;
     int screen_height;
     Font font;
