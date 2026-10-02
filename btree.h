@@ -397,11 +397,6 @@ namespace btree
 	    return root;
 	}
 
-	T* findDataAt(std::size_t k) const
-        {
-            return root->search(k);
-        }
-
 	void incrementKeysAbove(std::size_t threshold, std::size_t delta)
 	{
 	    root->shiftKeysAbove(threshold, delta, true);
@@ -412,6 +407,11 @@ namespace btree
 	    root->shiftKeysAbove(threshold, delta, false);
 	}
 	
+	T* findDataAt(std::size_t k) const
+        {
+            return root->search(k);
+        }
+
 	std::vector<const T*> findDataInRange(std::size_t left_bound, std::size_t right_bound) const
 	{
 	    std::vector<const T*> overlapped_pieces{};

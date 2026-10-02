@@ -168,7 +168,6 @@ std::vector<std::string_view> PieceTable::getLineSlices(std::size_t line_idx) co
 	const auto& [piece, accum_piece_offset] = findPieceAt(offset_within_line);
 	std::size_t piece_end_logical = accum_piece_offset + piece.length;
         std::size_t slice_end = std::min(piece_end_logical, line_end);
-	// TODO
 	assert(slice_end > offset_within_line );
         std::size_t slice_size = slice_end - offset_within_line;
 

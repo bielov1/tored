@@ -168,14 +168,6 @@ void Window::handleNavigationOrActionKey(KeyInputTag key)
     scrollToCursor();
 }
 
-// void Window::closeAndSwitchActiveWindow()
-// {
-//     // TODO
-//     // if (auto result = std::ranges::find(window_list, active_window) != window_list.end()) {
-//     // 	window_list.remove(active_window);
-//     // }   
-// }
-
 std::size_t Window::lineSize(std::size_t line) const
 {
     return buffer->getLineEnd(line) - buffer->getLineStart(line);

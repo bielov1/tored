@@ -131,7 +131,6 @@ public:
     void recalcViewPort(int char_width, int char_heigth);
     void attachBufferView();
     void setRect(const Rectangle& new_rect) { rect = new_rect; }
-    
  private:
     std::size_t lineSize(std::size_t line) const;
 	
